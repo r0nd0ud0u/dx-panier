@@ -1,14 +1,9 @@
 <?xml version="1.0" encoding="utf-8"?>
 <!--
-  Adaptive-icon background layer, injected into the built APK by
-  scripts/patch_android_icon.sh alongside ic_launcher_foreground.xml.
-
-  Flat fill in the app's own background colour (the "bg" custom property in
-  assets/main.css, written here without its leading dashes because a double
-  hyphen is not legal inside an XML comment). Covers the whole 108x108dp canvas
-  rather than only the visible safe zone: the launcher mask crops this layer to
-  whatever shape it wants (circle, squircle, rounded square) and any uncovered
-  area would show through as a transparent notch.
+  Adaptive-icon background layer, injected by scripts/patch_android_icon.sh.
+  Flat fill in the app's bg colour (assets/main.css), no leading dashes since
+  a double hyphen isn't legal in an XML comment. Covers the full 108x108dp
+  canvas since the launcher mask crops it to whatever shape it wants.
 -->
 <vector xmlns:android="http://schemas.android.com/apk/res/android"
     android:width="108dp"
