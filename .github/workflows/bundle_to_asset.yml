@@ -38,7 +38,7 @@ jobs:
           cache-on-failure: true
 
       - name: Install cargo-binstall
-        uses: cargo-bins/cargo-binstall@v1.21.0
+        uses: cargo-bins/cargo-binstall@v1.23.0
 
       # See the comment on the same step in test.yml for why `compile` is disabled
       # and why GITHUB_TOKEN is passed.
@@ -108,7 +108,7 @@ jobs:
           NEEDRESTART_MODE: a
 
       - name: Install cargo-binstall
-        uses: cargo-bins/cargo-binstall@v1.21.0
+        uses: cargo-bins/cargo-binstall@v1.23.0
 
       - name: Install dioxus-cli
         run: cargo binstall dioxus-cli@${{ env.DIOXUS_CLI_VERSION }} --force --disable-strategies compile
@@ -201,7 +201,7 @@ jobs:
           yes | "$ANDROID_HOME/cmdline-tools/latest/bin/sdkmanager" --sdk_root="$ANDROID_HOME" "build-tools;34.0.0" "platforms;android-34" > /dev/null
 
       - name: Install cargo-binstall
-        uses: cargo-bins/cargo-binstall@v1.21.0
+        uses: cargo-bins/cargo-binstall@v1.23.0
 
       - name: Install dioxus-cli
         run: cargo binstall dioxus-cli@${{ env.DIOXUS_CLI_VERSION }} --force --disable-strategies compile
