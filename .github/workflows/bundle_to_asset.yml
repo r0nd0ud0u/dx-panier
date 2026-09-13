@@ -1,0 +1,291 @@
+on:
+  push:
+    tags:
+      - "v*"
+  workflow_dispatch:
+
+name: Upload Release Asset
+
+permissions:
+  contents: write
+
+env:
+  CARGO_TERM_COLOR: always
+  DIOXUS_CLI_VERSION: 0.7.10
+
+jobs:
+  build-web:
+    name: Upload Web Client Asset
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v7
+
+      - name: Sync package version to git tag
+        if: startsWith(github.ref, 'refs/tags/v')
+        run: |
+          tag_version="${GITHUB_REF#refs/tags/v}"
+          sed -i "0,/^version = \".*\"/s//version = \"${tag_version}\"/" Cargo.toml
+          grep -m1 '^version' Cargo.toml
+        shell: bash
+
+      - name: Update rust
+        run: rustup update stable
+
+      - name: Cache Rust dependencies
+        uses: Swatinem/rust-cache@v2
+        with:
+          cache-on-failure: true
+
+      - name: Install cargo-binstall
+        uses: cargo-bins/cargo-binstall@v1.21.0
+
+      # See the comment on the same step in test.yml for why `compile` is disabled
+      # and why GITHUB_TOKEN is passed.
+      - name: Install dioxus-cli
+        run: cargo binstall dioxus-cli@${{ env.DIOXUS_CLI_VERSION }} --force --disable-strategies compile
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Build web bundle
+        run: |
+          chmod +x ./scripts/bundle_web.sh
+          ./scripts/bundle_web.sh
+
+      # A static site: no server binary, no runtime configuration. Unzip it
+      # anywhere a web server can reach.
+      - name: Zip bundle
+        run: zip -r panier-web.zip bundle
+
+      - name: Upload artifact
+        uses: actions/upload-artifact@v7
+        with:
+          name: panier-web
+          path: panier-web.zip
+
+      - name: Attach to release
+        if: startsWith(github.ref, 'refs/tags/v')
+        uses: softprops/action-gh-release@v2
+        with:
+          files: panier-web.zip
+
+  build-desktop:
+    name: Upload Desktop Client Asset (${{ matrix.os }})
+    runs-on: ${{ matrix.os }}
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [ubuntu-latest, windows-latest]
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v7
+
+      - name: Sync package version to git tag
+        if: startsWith(github.ref, 'refs/tags/v')
+        run: |
+          tag_version="${GITHUB_REF#refs/tags/v}"
+          sed -i "0,/^version = \".*\"/s//version = \"${tag_version}\"/" Cargo.toml
+          grep -m1 '^version' Cargo.toml
+        shell: bash
+
+      - name: Update rust
+        run: rustup update stable
+
+      - name: Cache Rust dependencies
+        uses: Swatinem/rust-cache@v2
+        with:
+          cache-on-failure: true
+
+      # DEBIAN_FRONTEND/NEEDRESTART_MODE avoid a needrestart interactive-dialog
+      # hang on the GitHub runner image.
+      - name: Install Linux desktop dependencies
+        if: runner.os == 'Linux'
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y libwebkit2gtk-4.1-dev libgtk-3-dev libasound2-dev libudev-dev libayatana-appindicator3-dev libxdo-dev libglib2.0-dev
+        env:
+          DEBIAN_FRONTEND: noninteractive
+          NEEDRESTART_MODE: a
+
+      - name: Install cargo-binstall
+        uses: cargo-bins/cargo-binstall@v1.21.0
+
+      - name: Install dioxus-cli
+        run: cargo binstall dioxus-cli@${{ env.DIOXUS_CLI_VERSION }} --force --disable-strategies compile
+        shell: bash
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Build desktop client
+        run: |
+          chmod +x ./scripts/bundle_desktop.sh
+          ./scripts/bundle_desktop.sh
+        shell: bash
+
+      - name: Zip bundle
+        run: |
+          version=$(grep -m1 '^version' Cargo.toml | sed -E 's/version = "(.*)"/\1/')
+          7z a "panier-desktop-${{ runner.os }}-v${version}.zip" bundle-desktop
+        shell: bash
+
+      - name: Upload artifact
+        uses: actions/upload-artifact@v7
+        with:
+          name: panier-desktop-${{ runner.os }}
+          path: panier-desktop-*.zip
+
+      - name: Attach to release
+        if: startsWith(github.ref, 'refs/tags/v')
+        uses: softprops/action-gh-release@v2
+        with:
+          files: panier-desktop-*.zip
+
+  build-android:
+    name: Upload Android Client Asset (arm64-v8a)
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v7
+
+      - name: Sync package version to git tag
+        if: startsWith(github.ref, 'refs/tags/v')
+        run: |
+          tag_version="${GITHUB_REF#refs/tags/v}"
+          sed -i "0,/^version = \".*\"/s//version = \"${tag_version}\"/" Cargo.toml
+          grep -m1 '^version' Cargo.toml
+        shell: bash
+
+      - name: Update rust
+        run: rustup update stable
+
+      - name: Cache Rust dependencies
+        uses: Swatinem/rust-cache@v2
+        with:
+          cache-on-failure: true
+
+      # arm64-v8a covers essentially every real Android phone since ~2019, and is
+      # the only choice that matters here: dioxus 0.7.10's manganis hard-errors on
+      # 32-bit Android targets ("Only 64-bit Android targets are supported"), so
+      # armv7-linux-androideabi cannot be built at all.
+      - name: Add Android rust target
+        run: rustup target add aarch64-linux-android
+
+      # `dx bundle --platform android` also compiles a host-target companion build
+      # that pulls in dioxus-desktop's Linux GTK bindings (tao/wry -> glib-sys,
+      # gtk-sys), so the desktop system packages are required here too or the build
+      # fails on `glib-2.0` via pkg-config. imagemagick is needed by the launcher
+      # icon patch step below.
+      - name: Install Linux desktop dependencies
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y libwebkit2gtk-4.1-dev libgtk-3-dev libasound2-dev libudev-dev libayatana-appindicator3-dev libxdo-dev libglib2.0-dev imagemagick
+        env:
+          DEBIAN_FRONTEND: noninteractive
+          NEEDRESTART_MODE: a
+
+      # ubuntu-latest ships the Android SDK preinstalled (ANDROID_HOME is already
+      # set); only the NDK needs to be added explicitly.
+      - name: Install Android NDK
+        id: setup-ndk
+        uses: nttld/setup-ndk@v1
+        with:
+          ndk-version: r27
+          add-to-path: true
+
+      # build-tools (aapt2/zipalign/apksigner) is already on this runner, but
+      # platforms;android-34 is not guaranteed — the icon patch needs it to link a
+      # standalone resource package against real framework resources. sdkmanager
+      # no-ops quickly if either is already present.
+      - name: Ensure Android build-tools and platform are installed
+        run: |
+          yes | "$ANDROID_HOME/cmdline-tools/latest/bin/sdkmanager" --sdk_root="$ANDROID_HOME" "build-tools;34.0.0" "platforms;android-34" > /dev/null
+
+      - name: Install cargo-binstall
+        uses: cargo-bins/cargo-binstall@v1.21.0
+
+      - name: Install dioxus-cli
+        run: cargo binstall dioxus-cli@${{ env.DIOXUS_CLI_VERSION }} --force --disable-strategies compile
+        shell: bash
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+
+      # `dx bundle` runs gradle's `assembleRelease`, which turns on R8 minification
+      # and with it the `lintVitalRelease` task. That task crashes on some
+      # AGP 8.8+/Gradle 9.1+ combinations (dioxus-cli 0.7.10 pins AGP 8.7.0 +
+      # Gradle 9.1.0 — DioxusLabs/dioxus#5251). dx exposes no way to pass
+      # `-x lintVitalAnalyzeRelease` through to gradle, and the generated gradle
+      # project is rewritten from scratch on every build, so a global init script is
+      # the only place this can be disabled.
+      - name: Disable Android lint-vital checks for release builds
+        run: |
+          mkdir -p ~/.gradle/init.d
+          cat > ~/.gradle/init.d/disable-lint-vital.gradle <<'EOF'
+          allprojects {
+              afterEvaluate { project ->
+                  if (project.plugins.hasPlugin('com.android.application')) {
+                      project.android.lint {
+                          checkReleaseBuilds = false
+                      }
+                  }
+              }
+          }
+          EOF
+
+      - name: Build Android client
+        run: |
+          chmod +x ./scripts/bundle_mobile.sh
+          ./scripts/bundle_mobile.sh aarch64-linux-android
+        shell: bash
+        env:
+          ANDROID_NDK_HOME: ${{ steps.setup-ndk.outputs.ndk-path }}
+
+      - name: Rename APK with version and ABI suffix
+        run: |
+          apk=$(find bundle-android -name '*.apk' | head -n1)
+          version=$(grep -m1 '^version' Cargo.toml | sed -E 's/version = "(.*)"/\1/')
+          mv "$apk" "bundle-android/panier-v${version}-arm64-v8a.apk"
+
+      # dioxus-cli 0.7.10's Android bundler hardcodes its launcher icon to Android
+      # Studio's stock "New Project" default and no Dioxus.toml field reaches that
+      # code path. See the script's header for how it patches the built APK's icon
+      # resources in place and re-signs it.
+      - name: Patch Android launcher icon
+        run: |
+          chmod +x ./scripts/patch_android_icon.sh
+          ./scripts/patch_android_icon.sh
+        shell: bash
+
+      # Guards the "package conflicts with an existing package" install failure:
+      # if the APK ever stops being signed by the committed android/debug.keystore,
+      # Android refuses to install the new build over the previous one. The expected
+      # fingerprint is that keystore's own, so this fails loudly on a signing change
+      # rather than silently shipping an un-upgradable APK.
+      - name: Verify APK signing certificate
+        run: |
+          apksigner=$(find "$ANDROID_HOME/build-tools" -name apksigner -type f | sort -V | tail -n1)
+          apk=$(find bundle-android -name '*.apk' -print -quit)
+          # keytool prints AA:BB:CC…, apksigner prints aabbcc… — strip the colons
+          # and case-fold both before comparing, or this never matches.
+          expected=$(keytool -list -v -keystore android/debug.keystore -storepass android -alias androiddebugkey \
+            | grep -m1 'SHA256:' | sed 's/.*SHA256: *//' | tr -d ' :')
+          actual=$("$apksigner" verify --print-certs "$apk" \
+            | grep -m1 'SHA-256 digest:' | sed 's/.*digest: *//' | tr -d ' :')
+          echo "expected=$expected"
+          echo "actual=$actual"
+          if [ "${expected,,}" != "${actual,,}" ]; then
+            echo "::error::APK is not signed with android/debug.keystore — installs over a previous build will fail." >&2
+            exit 1
+          fi
+        shell: bash
+
+      - name: Upload artifact
+        uses: actions/upload-artifact@v7
+        with:
+          name: panier-android-apk
+          path: bundle-android/*.apk
+
+      - name: Attach to release
+        if: startsWith(github.ref, 'refs/tags/v')
+        uses: softprops/action-gh-release@v2
+        with:
+          files: bundle-android/*.apk

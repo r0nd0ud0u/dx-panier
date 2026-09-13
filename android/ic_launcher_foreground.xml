@@ -1,0 +1,44 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!--
+  Adaptive-icon foreground layer, injected into the built APK by
+  scripts/patch_android_icon.sh (dioxus-cli 0.7.10 hardcodes its own default
+  icon and offers no config hook - see that script's header).
+
+  Deliberately a self-contained vector with no <bitmap android:src=...>
+  reference: the foreground CANNOT point at @mipmap/ic_launcher, because on
+  API 26+ that name resolves to mipmap-anydpi-v26/ic_launcher.xml - this
+  adaptive icon itself - so the icon would reference itself, fail to
+  inflate, and the launcher would fall back to its generic default app icon.
+
+  Geometry: 108x108dp canvas, but only the central 72dp circle (radius 36
+  around 54,54) is guaranteed visible under every launcher mask. Every point
+  of this artwork sits within radius ~34 of that centre.
+
+  The three bars are painted in the background layer's colour rather than cut
+  out of the basket path: the two layers are masked and scaled together, so
+  they always register exactly. Same artwork as assets/icon.svg, the source
+  of assets/icon-512.png (the legacy pre-API-26 bitmap); keep them in sync.
+-->
+<vector xmlns:android="http://schemas.android.com/apk/res/android"
+    android:width="108dp"
+    android:height="108dp"
+    android:viewportWidth="108"
+    android:viewportHeight="108">
+    <path
+        android:strokeColor="#3ddc97"
+        android:strokeWidth="4.5"
+        android:strokeLineCap="round"
+        android:pathData="M41,50 A13,13 0 0 1 67,50" />
+    <path
+        android:fillColor="#3ddc97"
+        android:pathData="M28,50 L80,50 L71,79 A5,5 0 0 1 66,83 L42,83 A5,5 0 0 1 37,79 Z" />
+    <path
+        android:fillColor="#0f1419"
+        android:pathData="M40,68h6v8h-6z" />
+    <path
+        android:fillColor="#0f1419"
+        android:pathData="M50,62h6v14h-6z" />
+    <path
+        android:fillColor="#0f1419"
+        android:pathData="M60,56h6v20h-6z" />
+</vector>

@@ -1,0 +1,390 @@
+/* Dark only, on purpose: the app opens straight onto a dark ground (BOOT_BG in
+ * src/common.rs, painted by the webview before this file is even parsed) and a
+ * second palette would have to be decided before the first paint to avoid a
+ * flash. Keep --bg in sync with that constant. */
+:root {
+  --bg: #0f1419;
+  --surface: #161d26;
+  --surface-2: #1d2732;
+  --border: #263140;
+  --text: #e6edf3;
+  --text-muted: #8b9aab;
+  --accent: #3ddc97;
+  --accent-dim: #1f6f4e;
+  --danger: #f0616d;
+  --warn: #f4b740;
+  --radius: 12px;
+  color-scheme: dark;
+}
+
+* {
+  box-sizing: border-box;
+}
+
+html,
+body {
+  margin: 0;
+  padding: 0;
+  background: var(--bg);
+  color: var(--text);
+  font-family: "Inter", "Segoe UI", Roboto, "Helvetica Neue", Arial, system-ui,
+    sans-serif;
+  font-size: 16px;
+  -webkit-text-size-adjust: 100%;
+}
+
+/* The tab bar is fixed to the bottom, so the scrolling column must stop above
+ * it — plus the home-indicator inset on a phone with no hardware buttons. */
+.app {
+  min-height: 100dvh;
+}
+
+.content {
+  max-width: 720px;
+  margin: 0 auto;
+  padding: 16px 16px calc(88px + env(safe-area-inset-bottom));
+}
+
+.page-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  margin: 8px 0 20px;
+}
+
+h1 {
+  margin: 0;
+  font-size: 1.5rem;
+  font-weight: 600;
+}
+
+h2 {
+  margin: 0 0 12px;
+  font-size: 0.8rem;
+  font-weight: 600;
+  color: var(--text-muted);
+  text-transform: uppercase;
+  letter-spacing: 0.06em;
+}
+
+.section {
+  margin-top: 28px;
+}
+
+.card {
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  padding: 16px;
+}
+
+/* Form ------------------------------------------------------------------- */
+
+.form {
+  display: flex;
+  flex-direction: column;
+  gap: 14px;
+}
+
+.field {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  flex: 1;
+  min-width: 0;
+}
+
+.field-label {
+  font-size: 0.78rem;
+  color: var(--text-muted);
+}
+
+.field-row {
+  display: flex;
+  gap: 12px;
+}
+
+.filters {
+  display: flex;
+  gap: 12px;
+  margin-bottom: 20px;
+}
+
+.filters .control {
+  flex: 1;
+  min-width: 0;
+}
+
+.control {
+  width: 100%;
+  padding: 12px;
+  background: var(--surface-2);
+  border: 1px solid var(--border);
+  border-radius: 10px;
+  color: var(--text);
+  /* 16px or larger, always: iOS Safari zooms the whole page in on focus for
+   * anything smaller, and the layout never zooms back out. */
+  font: inherit;
+  font-size: 1rem;
+}
+
+.control:focus-visible {
+  outline: 2px solid var(--accent);
+  outline-offset: 1px;
+}
+
+.control::placeholder {
+  color: var(--text-muted);
+}
+
+textarea.control {
+  resize: vertical;
+}
+
+.mono {
+  font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
+  font-size: 0.8rem;
+}
+
+.button {
+  padding: 13px 18px;
+  background: var(--surface-2);
+  border: 1px solid var(--border);
+  border-radius: 10px;
+  color: var(--text);
+  font: inherit;
+  font-weight: 600;
+  cursor: pointer;
+}
+
+.button:disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
+}
+
+.button.primary {
+  background: var(--accent);
+  border-color: var(--accent);
+  color: #08120d;
+}
+
+.button.destructive {
+  border-color: var(--danger);
+  color: var(--danger);
+}
+
+.icon-button {
+  flex: none;
+  width: 34px;
+  height: 34px;
+  background: none;
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  color: var(--text-muted);
+  font-size: 1.1rem;
+  line-height: 1;
+  cursor: pointer;
+}
+
+/* Lists ------------------------------------------------------------------ */
+
+.list {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.row,
+.card-link {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  padding: 12px 14px;
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+}
+
+.card-row {
+  list-style: none;
+}
+
+.card-link {
+  text-decoration: none;
+  color: inherit;
+}
+
+.best-row {
+  border-color: var(--accent-dim);
+}
+
+.row-main {
+  display: flex;
+  flex-direction: column;
+  gap: 3px;
+  flex: 1;
+  min-width: 0;
+}
+
+.row-side {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-end;
+  gap: 3px;
+  flex: none;
+}
+
+.row-title {
+  font-weight: 600;
+  overflow-wrap: anywhere;
+}
+
+.row-sub,
+.muted {
+  font-size: 0.8rem;
+  color: var(--text-muted);
+}
+
+.muted {
+  margin: 0 0 12px;
+  line-height: 1.5;
+}
+
+.price {
+  font-weight: 600;
+  font-variant-numeric: tabular-nums;
+  white-space: nowrap;
+}
+
+.best {
+  font-size: 0.8rem;
+  color: var(--accent);
+}
+
+.error {
+  margin: 0;
+  color: var(--danger);
+  font-size: 0.85rem;
+}
+
+.notice {
+  margin: 0;
+  color: var(--accent);
+  font-size: 0.85rem;
+}
+
+/* Trend badge ------------------------------------------------------------ */
+
+.trend {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  padding: 2px 8px;
+  border-radius: 999px;
+  font-size: 0.72rem;
+  white-space: nowrap;
+  background: var(--surface-2);
+  color: var(--text-muted);
+}
+
+.trend.up {
+  color: var(--danger);
+}
+
+.trend.down {
+  color: var(--accent);
+}
+
+.trend-arrow {
+  font-weight: 700;
+}
+
+/* Chart ------------------------------------------------------------------ */
+
+.chart {
+  display: flex;
+  gap: 10px;
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  padding: 12px;
+}
+
+.chart svg {
+  flex: 1;
+  min-width: 0;
+  height: 120px;
+}
+
+.chart-area {
+  fill: var(--accent);
+  opacity: 0.12;
+}
+
+.chart-line {
+  fill: none;
+  stroke: var(--accent);
+  stroke-width: 2;
+  /* The viewBox is stretched to the container width, which would stretch the
+   * stroke with it; this keeps the line an even 2px at any size. */
+  vector-effect: non-scaling-stroke;
+}
+
+.chart-dot {
+  fill: var(--accent);
+}
+
+.chart-scale {
+  display: flex;
+  flex-direction: column;
+  justify-content: space-between;
+  flex: none;
+  font-size: 0.7rem;
+  color: var(--text-muted);
+  white-space: nowrap;
+}
+
+/* Tab bar ---------------------------------------------------------------- */
+
+.tabbar {
+  position: fixed;
+  bottom: 0;
+  left: 0;
+  right: 0;
+  display: flex;
+  background: color-mix(in srgb, var(--surface) 92%, transparent);
+  backdrop-filter: blur(12px);
+  border-top: 1px solid var(--border);
+  padding-bottom: env(safe-area-inset-bottom);
+}
+
+.tab {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 3px;
+  padding: 10px 4px;
+  color: var(--text-muted);
+  text-decoration: none;
+  font-size: 0.68rem;
+}
+
+.tab-active {
+  color: var(--accent);
+}
+
+.icon {
+  width: 22px;
+  height: 22px;
+}
+
+@media (min-width: 640px) {
+  .content {
+    padding-top: 32px;
+  }
+}

@@ -1,0 +1,67 @@
+[application]
+
+# App (Project) Name — window title, Android app label, and (via
+# [bundle].identifier below) part of the deb/rpm/APK package name.
+name = "Panier"
+
+# No server: every byte this app stores lives on the device it was entered on,
+# so the web build is a plain static SPA rather than a fullstack one.
+default_platform = "web"
+
+# resource (assets) file folder
+asset_dir = "assets"
+
+# `build` & `serve` output path
+out_dir = "bundle"
+
+[web.app]
+
+# HTML title tag content
+title = "Panier — suivi des prix"
+
+[web.watcher]
+
+# when watcher trigger, regenerate the `index.html`
+reload_html = true
+
+# which files or dirs will be watcher monitoring
+watch_path = ["src", "assets"]
+
+[web.resource]
+script = []
+
+[web.resource.dev]
+script = []
+
+[bundle]
+# Drives both the Android application ID and the deb/rpm package name. Changing
+# it means changing the hardcoded Android data-dir path in src/storage.rs to
+# match, or the installed app reads and writes the wrong /data/data/<id>/
+# directory and every saved purchase disappears.
+identifier = "io.github.r0ndoudou.panier"
+publisher = "r0ndoudou"
+resources = ["assets/*"]
+
+# Desktop icon, read off disk at bundle time. Must be square: dx derives the
+# hicolor size folder from the PNG's own dimensions. Linux/macOS only — Windows
+# uses [bundle.windows] below, and dx 0.7.10 ignores all of these for Android
+# (see scripts/patch_android_icon.sh).
+icon = ["assets/icon-512.png"]
+
+[bundle.deb]
+depends = ["libwebkit2gtk-4.1-0", "libxdo3"]
+
+# dx's Windows bundler ignores [bundle].icon above; it needs this instead.
+[bundle.windows]
+icon_path = "assets/favicon.ico"
+
+# Without this section dx runs `assembleDebug`, which signs with AGP's own
+# unseeded ~/.android/debug.keystore — a fresh key per CI run, so Android refuses
+# to install a new build over the previous one. Pointing at the committed
+# keystore makes signing deterministic. Standard debug-keystore credentials,
+# not a secret: anyone can generate an identical one.
+[bundle.android]
+jks_file = "android/debug.keystore"
+jks_password = "android"
+key_alias = "androiddebugkey"
+key_password = "android"

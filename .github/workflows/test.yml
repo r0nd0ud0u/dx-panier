@@ -1,0 +1,67 @@
+name: test
+
+on:
+  push:
+  pull_request:
+  workflow_dispatch:
+
+env:
+  CARGO_TERM_COLOR: always
+
+jobs:
+  check:
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout repo
+        uses: actions/checkout@v7
+
+      # https://github.com/DioxusLabs/dioxus/blob/main/.github/workflows/main.yml
+      # The desktop feature links against GTK/WebKit even when only type-checking.
+      - uses: awalsh128/cache-apt-pkgs-action@latest
+        with:
+          packages: libwebkit2gtk-4.1-dev libgtk-3-dev libayatana-appindicator3-dev libxdo-dev
+          version: 1.0
+
+      - name: Update rust
+        run: rustup update stable
+
+      - uses: Swatinem/rust-cache@v2
+        with:
+          cache-all-crates: "true"
+
+      - name: Install cargo-binstall
+        uses: cargo-bins/cargo-binstall@v1.21.0
+
+      # binstall's default `--strategies` list ends in `compile` as a silent
+      # last-resort fallback if fetching the prebuilt asset ever hiccups. That
+      # fallback builds against whatever is newest on crates.io right now, so it is
+      # not reproducible and fails on unrelated upstream dependency pairings.
+      # Disabling it makes this step fail loudly on a real download problem instead.
+      #
+      # binstall's GitHub-release check hits api.github.com unauthenticated by
+      # default, capped at 60 requests/hour per source IP — shared across every
+      # GitHub-hosted runner, so it is routinely already exhausted. binstall reads
+      # GITHUB_TOKEN automatically; the token Actions injects for free raises that
+      # cap to 5000/hour and needs no extra repo secret.
+      - name: Install dioxus-cli
+        run: cargo binstall dioxus-cli@0.7.10 --force --disable-strategies compile
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Check formatting
+        run: cargo fmt --all --check
+
+      # Per feature set rather than --all-features: web, desktop and mobile each
+      # select a different dioxus renderer and are not meant to be enabled together.
+      - name: Clippy (web)
+        run: cargo clippy --all-targets -- -D warnings
+
+      - name: Clippy (desktop)
+        run: cargo clippy --all-targets --no-default-features --features desktop -- -D warnings
+
+      - name: Run tests
+        run: cargo test
+
+      - name: Check web build
+        run: dx build --platform web
