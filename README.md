@@ -1,48 +1,48 @@
 # Panier
 
-Suivi du prix des courses, produit par produit et magasin par magasin. On saisit
-ce qu'on a payé en sortant du magasin ; l'app répond à la question « où est-ce que
-je dois acheter quoi ».
+Grocery price tracking, product by product and store by store. You record what you
+paid on the way out of the store; the app answers the question "where should I buy
+what".
 
-Tout est stocké **sur l'appareil**. Il n'y a pas de serveur, pas de compte, pas de
-réseau : aucune ligne de code de cette application n'ouvre une connexion.
+Everything is stored **on the device**. There is no server, no account, no network:
+not a single line of code in this application opens a connection.
 
-Écrit en Rust avec [Dioxus](https://dioxuslabs.com/) ; la même base de code produit
-un APK Android, un exécutable desktop (Linux, Windows) et un site statique.
+Written in Rust with [Dioxus](https://dioxuslabs.com/); the same codebase produces
+an Android APK, a desktop executable (Linux, Windows) and a static website.
 
-## Ce que ça fait
+## What it does
 
-- **Ajouter** un achat : produit, magasin, prix payé, quantité, unité, date. Les
-  noms déjà saisis sont proposés en autocomplétion ; le magasin et la date restent
-  d'une ligne à l'autre, parce qu'un ticket de caisse, c'est dix produits dans un
-  seul magasin le même jour.
-- **Prix unitaire** : tout est ramené au prix par kilo, par litre ou par pièce.
-  C'est ce qui rend comparables une plaquette de 250 g et un pain de 500 g. Les
-  quantités se saisissent en g ou ml si c'est ce qui est écrit sur l'emballage —
-  la conversion est faite à l'enregistrement.
-- **Produits** : la liste de tout ce qui a été acheté, avec le dernier prix, la
-  tendance, et le magasin le moins cher. Filtrable par magasin.
-- **Détail d'un produit** : la courbe du prix unitaire dans le temps, le
-  comparatif par magasin, et l'historique complet.
-- **Où acheter** : chaque produit rangé sous le magasin qui le vend le moins cher
-  en moyenne, avec l'écart par unité.
-- **Réglages** : français/anglais, sauvegarde et restauration en JSON, purge.
+- **Add** a purchase: product, store, price paid, quantity, unit, date. Names you
+  have already entered are offered as autocompletion; the store and the date carry
+  over from one entry to the next, because a receipt is ten products from a single
+  store on the same day.
+- **Unit price**: everything is reduced to a price per kilo, per litre or per item.
+  That is what makes a 250 g pack and a 500 g loaf comparable. Quantities can be
+  entered in g or ml if that is what the packaging says — the conversion happens
+  when the entry is saved.
+- **Products**: the list of everything that has been bought, with the latest price,
+  the trend, and the cheapest store. Filterable by store.
+- **Product detail**: the unit price curve over time, the store-by-store comparison,
+  and the full history.
+- **Where to buy**: every product filed under the store that sells it cheapest on
+  average, with the difference per unit.
+- **Settings**: French/English, JSON backup and restore, wipe.
 
-## Développement
+## Development
 
 ```bash
-./scripts/dev_web.sh        # navigateur, avec hot reload
-./scripts/dev_desktop.sh    # fenêtre native
-./scripts/dev_android.sh    # téléphone ou émulateur branché en USB
+./scripts/dev_web.sh        # browser, with hot reload
+./scripts/dev_desktop.sh    # native window
+./scripts/dev_android.sh    # phone or emulator connected over USB
 ```
 
-`dev_web.sh` écoute sur `0.0.0.0`, donc le téléphone peut aussi simplement ouvrir
-`http://<ip-de-la-machine>:8080` sans rien installer.
+`dev_web.sh` listens on `0.0.0.0`, so a phone can also just open
+`http://<machine-ip>:8080` without installing anything.
 
-Prérequis : Rust stable et `dioxus-cli` 0.7.10 (`cargo binstall dioxus-cli@0.7.10`).
-Pour Android, voir [docs/android-local.md](docs/android-local.md).
+Requirements: stable Rust and `dioxus-cli` 0.7.10 (`cargo binstall dioxus-cli@0.7.10`).
+For Android, see [docs/android-local.md](docs/android-local.md).
 
-## Vérifications
+## Checks
 
 ```bash
 cargo fmt --all --check
@@ -50,55 +50,54 @@ cargo clippy --all-targets -- -D warnings
 cargo test
 ```
 
-Les tests couvrent le calcul : prix unitaire, conversions d'unité, classement des
-magasins, tendances, filtres, et la parité des deux fichiers de traduction.
+The tests cover the computation: unit price, unit conversions, store ranking,
+trends, filters, and parity between the two translation files.
 
-## Installer l'APK sur son téléphone
+## Installing the APK on your phone
 
-Pousser un tag déclenche la CI, qui construit et attache les binaires à la release
-GitHub :
+Pushing a tag triggers CI, which builds the binaries and attaches them to the
+GitHub release:
 
 ```bash
 git tag v0.1.0 && git push origin v0.1.0
 ```
 
-L'APK apparaît en asset de la release sous le nom `panier-v0.1.0-arm64-v8a.apk`.
-Il se télécharge directement depuis le téléphone ; Android demandera d'autoriser
-l'installation depuis cette source.
+The APK shows up as a release asset named `panier-v0.1.0-arm64-v8a.apk`. It can be
+downloaded straight from the phone; Android will ask you to allow installation from
+that source.
 
-L'APK est signé avec `android/debug.keystore`, qui est versionné **exprès** : sans
-clé stable, Android refuse d'installer une nouvelle version par-dessus l'ancienne.
-Ce n'est pas un secret — c'est la clé de debug standard, que n'importe qui peut
-regénérer. Elle ne convient pas pour une publication sur le Play Store.
+The APK is signed with `android/debug.keystore`, which is committed **on purpose**:
+without a stable key, Android refuses to install a new version over the old one.
+This is not a secret — it is the standard debug key, which anyone can regenerate.
+It is not suitable for publishing on the Play Store.
 
-Pour construire l'APK en local plutôt qu'en CI, voir
+To build the APK locally rather than in CI, see
 [docs/android-local.md](docs/android-local.md).
 
-## Où sont les données
+## Where the data lives
 
-| Plateforme | Emplacement |
+| Platform | Location |
 | --- | --- |
-| Navigateur | `localStorage`, clé `panier-db-v1` |
+| Browser | `localStorage`, key `panier-db-v1` |
 | Linux | `~/.local/share/panier/panier-db-v1` |
 | Windows | `%LOCALAPPDATA%\panier\panier-db-v1` |
 | Android | `/data/data/io.github.r0ndoudou.panier/files/panier/panier-db-v1` |
 
-Ces emplacements ne communiquent pas entre eux : un téléphone et un navigateur ont
-chacun leur propre historique. Les réglages permettent d'exporter en JSON depuis
-l'un et de restaurer dans l'autre.
+These locations do not talk to each other: a phone and a browser each have their
+own history. The settings let you export JSON from one and restore it in the other.
 
-Désinstaller l'application efface ses données. **Exporter avant.**
+Uninstalling the application erases its data. **Export first.**
 
-## Structure
+## Layout
 
 ```
-src/model.rs     tout le domaine : achats, prix unitaires, comparaisons (et leurs tests)
-src/storage.rs   persistance locale, une seule clé JSON
-src/common.rs    routes et constantes du premier rendu
-src/pages/       une page par onglet, plus les widgets partagés
-scripts/         lancement et packaging pour les trois plateformes
+src/model.rs     the whole domain: purchases, unit prices, comparisons (and their tests)
+src/storage.rs   local persistence, a single JSON key
+src/common.rs    routes and first-render constants
+src/pages/       one page per tab, plus the shared widgets
+scripts/         launching and packaging for the three platforms
 ```
 
-## Licence
+## License
 
 Apache-2.0.
