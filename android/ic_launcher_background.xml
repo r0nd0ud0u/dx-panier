@@ -3,11 +3,12 @@
   Adaptive-icon background layer, injected into the built APK by
   scripts/patch_android_icon.sh alongside ic_launcher_foreground.xml.
 
-  Flat fill in the app's own background colour (--panier-bg in
-  assets/main.css). Covers the whole 108x108dp canvas rather than only the
-  visible safe zone: the launcher mask crops this layer to whatever shape it
-  wants (circle, squircle, rounded square) and any uncovered area would show
-  through as a transparent notch.
+  Flat fill in the app's own background colour (the "bg" custom property in
+  assets/main.css, written here without its leading dashes because a double
+  hyphen is not legal inside an XML comment). Covers the whole 108x108dp canvas
+  rather than only the visible safe zone: the launcher mask crops this layer to
+  whatever shape it wants (circle, squircle, rounded square) and any uncovered
+  area would show through as a transparent notch.
 -->
 <vector xmlns:android="http://schemas.android.com/apk/res/android"
     android:width="108dp"
