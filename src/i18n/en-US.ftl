@@ -15,6 +15,10 @@ field-note-placeholder = Brand, special offer…
 field-product-placeholder = Butter
 field-store-placeholder = Lidl
 field-piece-weight = Weight per piece (optional)
+field-pack = Pack
+field-pack-none = Free quantity
+field-pack-label = Pack name
+field-pack-pieces = Pieces per pack
 
 unit-kg = kilo
 unit-g = gram
@@ -35,6 +39,8 @@ error-store = Enter a store.
 error-price = Invalid price — write 2.45, for example.
 error-quantity = Invalid quantity — it must be greater than zero.
 error-piece-weight = Invalid weight — leave this field empty if you don't know it.
+error-pack-label = Enter a name for this pack.
+error-pack-pieces = Invalid piece count — it must be greater than zero.
 
 recent-title = Latest entries
 recent-empty = Nothing recorded yet.
@@ -75,6 +81,9 @@ settings-title = Settings
 settings-language = Language
 settings-data = Data
 settings-stats = { $purchases } purchases · { $products } products · { $stores } stores
+settings-packs = My packs
+settings-packs-help = Define a pack size once (e.g. Coca-Cola by 6) to get it back as a shortcut on the add form.
+settings-packs-empty = No packs defined yet.
 settings-export = Backup
 # Android only — the file-export button isn't available there; see the
 # comment on `BackupSection` (feature = "mobile") in settings.rs.

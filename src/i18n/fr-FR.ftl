@@ -15,6 +15,10 @@ field-note-placeholder = Marque, promotion…
 field-product-placeholder = Beurre doux
 field-store-placeholder = Lidl
 field-piece-weight = Poids d'une pièce (optionnel)
+field-pack = Pack
+field-pack-none = Quantité libre
+field-pack-label = Nom du pack
+field-pack-pieces = Nombre de pièces par pack
 
 unit-kg = kilo
 unit-g = gramme
@@ -35,6 +39,8 @@ error-store = Indique un magasin.
 error-price = Prix invalide — écris par exemple 2,45.
 error-quantity = Quantité invalide — elle doit être supérieure à zéro.
 error-piece-weight = Poids invalide — laisse ce champ vide si tu ne le connais pas.
+error-pack-label = Indique un nom pour ce pack.
+error-pack-pieces = Nombre de pièces invalide — il doit être supérieur à zéro.
 
 recent-title = Derniers ajouts
 recent-empty = Aucun achat enregistré pour l'instant.
@@ -75,6 +81,9 @@ settings-title = Réglages
 settings-language = Langue
 settings-data = Données
 settings-stats = { $purchases } achats · { $products } produits · { $stores } magasins
+settings-packs = Mes packs
+settings-packs-help = Définis une fois la taille d'un pack (ex. Coca-Cola par 6) pour la retrouver comme raccourci dans le formulaire d'ajout.
+settings-packs-empty = Aucun pack défini pour l'instant.
 settings-export = Sauvegarde
 # Android uniquement — le bouton d'export par fichier n'y est pas disponible ;
 # voir le commentaire sur `BackupSection` (feature = "mobile") dans settings.rs.

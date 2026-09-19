@@ -122,10 +122,26 @@ impl Purchase {
     }
 }
 
+/// A named shortcut for a product's pack size, e.g. "Pack de 6" for Coca-Cola:
+/// picking it in the add form fills in the quantity (and forces the unit to
+/// [`Unit::Piece`]) instead of it being retyped, and possibly miscounted,
+/// every time that product is bought by the pack.
+#[derive(Clone, Debug, PartialEq, Serialize, Deserialize)]
+pub struct PackDef {
+    pub id: u64,
+    pub product: String,
+    pub label: String,
+    pub pieces: f64,
+}
+
 /// Everything the app stores, serialized as one JSON blob (see [`crate::storage`]).
 #[derive(Clone, Debug, Default, PartialEq, Serialize, Deserialize)]
 pub struct Db {
     pub purchases: Vec<Purchase>,
+    /// Absent from every backup made before this field existed — defaults to
+    /// empty so an old export still imports instead of failing to parse.
+    #[serde(default)]
+    pub packs: Vec<PackDef>,
 }
 
 /// What one store charges for one product, averaged over every visit.
@@ -220,6 +236,27 @@ impl Db {
 
     pub fn remove(&mut self, id: u64) {
         self.purchases.retain(|purchase| purchase.id != id);
+    }
+
+    pub fn next_pack_id(&self) -> u64 {
+        self.packs.iter().map(|p| p.id).max().unwrap_or(0) + 1
+    }
+
+    pub fn insert_pack(&mut self, pack: PackDef) {
+        self.packs.push(pack);
+    }
+
+    pub fn remove_pack(&mut self, id: u64) {
+        self.packs.retain(|pack| pack.id != id);
+    }
+
+    /// Every pack defined for one product, in the order they were added.
+    pub fn packs_for(&self, product: &str) -> Vec<&PackDef> {
+        let key = fold_key(product);
+        self.packs
+            .iter()
+            .filter(|pack| fold_key(&pack.product) == key)
+            .collect()
     }
 
     /// Distinct store names, most recently used first — that ordering puts the store
@@ -754,7 +791,40 @@ mod tests {
     fn a_stored_database_survives_a_round_trip() {
         let mut db = Db::default();
         db.insert(purchase(1, "Beurre", "Aldi", 150, 0.25, 1));
+        db.insert_pack(PackDef {
+            id: 1,
+            product: "Coca-Cola".to_owned(),
+            label: "Pack de 6".to_owned(),
+            pieces: 6.0,
+        });
         let json = serde_json::to_string(&db).unwrap();
         assert_eq!(serde_json::from_str::<Db>(&json).unwrap(), db);
+    }
+
+    #[test]
+    fn a_backup_made_before_packs_existed_still_imports() {
+        // No "packs" key at all — exactly what every backup exported before
+        // this field was added looks like.
+        let json = r#"{"purchases":[]}"#;
+        let db: Db = serde_json::from_str(json).unwrap();
+        assert!(db.packs.is_empty());
+    }
+
+    #[test]
+    fn packs_are_looked_up_by_product_regardless_of_spelling() {
+        let mut db = Db::default();
+        db.insert_pack(PackDef {
+            id: db.next_pack_id(),
+            product: "Coca-Cola".to_owned(),
+            label: "Pack de 6".to_owned(),
+            pieces: 6.0,
+        });
+        assert_eq!(db.packs_for("coca-cola").len(), 1);
+        assert_eq!(db.packs_for("  COCA-COLA ").len(), 1);
+        assert!(db.packs_for("Fanta").is_empty());
+
+        let id = db.packs[0].id;
+        db.remove_pack(id);
+        assert!(db.packs_for("Coca-Cola").is_empty());
     }
 }

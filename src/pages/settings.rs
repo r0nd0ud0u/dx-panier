@@ -1,7 +1,7 @@
 use dioxus::prelude::*;
 use dioxus_i18n::t;
 
-use crate::model::Db;
+use crate::model::{Db, PackDef, format_number, normalize, parse_quantity};
 use crate::storage::{use_db, use_lang};
 
 #[component]
@@ -45,6 +45,8 @@ pub fn SettingsPage() -> Element {
             p { class: "muted", {t!("settings-storage")} }
         }
 
+        PacksSection { db }
+
         BackupSection { db, notice }
 
         section { class: "section",
@@ -74,6 +76,122 @@ pub fn SettingsPage() -> Element {
                     {t!("settings-wipe")}
                 }
             }
+        }
+    }
+}
+
+/// Named pack sizes ("Pack de 6" for Coca-Cola) that the add form offers as a
+/// quantity shortcut for that product — see `matching_packs` in add.rs.
+#[component]
+fn PacksSection(mut db: Signal<Db>) -> Element {
+    let mut product = use_signal(String::new);
+    let mut label = use_signal(String::new);
+    let mut pieces = use_signal(String::new);
+    let mut error: Signal<Option<String>> = use_signal(|| None);
+
+    let known_products = use_memo(move || db().product_names());
+    let packs = use_memo(move || db().packs.clone());
+
+    let mut add_pack = move || {
+        let product_name = normalize(&product());
+        let label_text = normalize(&label());
+        if product_name.is_empty() {
+            error.set(Some(t!("error-product")));
+            return;
+        }
+        if label_text.is_empty() {
+            error.set(Some(t!("error-pack-label")));
+            return;
+        }
+        let Some(pieces_value) = parse_quantity(&pieces()) else {
+            error.set(Some(t!("error-pack-pieces")));
+            return;
+        };
+        let id = db.read().next_pack_id();
+        db.write().insert_pack(PackDef {
+            id,
+            product: product_name,
+            label: label_text,
+            pieces: pieces_value,
+        });
+        error.set(None);
+        product.set(String::new());
+        label.set(String::new());
+        pieces.set(String::new());
+    };
+
+    rsx! {
+        section { class: "section",
+            h2 { {t!("settings-packs")} }
+            p { class: "muted", {t!("settings-packs-help")} }
+
+            if packs().is_empty() {
+                p { class: "muted", {t!("settings-packs-empty")} }
+            } else {
+                ul { class: "list",
+                    for pack in packs() {
+                        li { key: "{pack.id}", class: "row",
+                            div { class: "row-main",
+                                span { class: "row-title", "{pack.product}" }
+                                span { class: "row-sub",
+                                    "{pack.label} · {format_number(pack.pieces)} "
+                                    {t!("unit-piece")}
+                                }
+                            }
+                            button {
+                                class: "icon-button",
+                                "aria-label": t!("action-delete"),
+                                onclick: move |_| db.write().remove_pack(pack.id),
+                                "×"
+                            }
+                        }
+                    }
+                }
+            }
+
+            div { class: "field-row",
+                label { class: "field",
+                    span { class: "field-label", {t!("field-product")} }
+                    input {
+                        class: "control",
+                        "list": "known-products-for-packs",
+                        value: "{product}",
+                        placeholder: t!("field-product-placeholder"),
+                        oninput: move |event| product.set(event.value()),
+                    }
+                }
+                label { class: "field",
+                    span { class: "field-label", {t!("field-pack-label")} }
+                    input {
+                        class: "control",
+                        value: "{label}",
+                        placeholder: "Pack de 6",
+                        oninput: move |event| label.set(event.value()),
+                    }
+                }
+            }
+            datalist { id: "known-products-for-packs",
+                for name in known_products() {
+                    option { key: "{name}", value: "{name}" }
+                }
+            }
+
+            label { class: "field",
+                span { class: "field-label", {t!("field-pack-pieces")} }
+                input {
+                    class: "control",
+                    inputmode: "decimal",
+                    value: "{pieces}",
+                    placeholder: "6",
+                    oninput: move |event| pieces.set(event.value()),
+                }
+            }
+
+            if let Some(message) = error() {
+                p { class: "error", role: "alert", "{message}" }
+            }
+
+            button { class: "button", onclick: move |_| add_pack(), {t!("action-add")} }
         }
     }
 }

@@ -2,7 +2,9 @@ use chrono::NaiveDate;
 use dioxus::prelude::*;
 use dioxus_i18n::t;
 
-use crate::model::{InputUnit, Purchase, normalize, parse_price_to_cents, parse_quantity};
+use crate::model::{
+    InputUnit, Purchase, format_number, normalize, parse_price_to_cents, parse_quantity,
+};
 use crate::pages::widgets::{RecentRow, input_unit_label};
 use crate::pages::{DATE_FORMAT, today};
 use crate::storage::use_db;
@@ -23,9 +25,25 @@ pub fn AddPage() -> Element {
     let mut date = use_signal(|| today().format(DATE_FORMAT).to_string());
     let mut note = use_signal(String::new);
     let mut error: Signal<Option<String>> = use_signal(|| None);
+    // Reset right after applying a pack — a select value that changes on its
+    // own, from the chosen id back to "", is what makes Dioxus re-render the
+    // dropdown back to its placeholder instead of leaving it stuck on the pack
+    // just applied.
+    let mut chosen_pack = use_signal(String::new);
 
     let known_products = use_memo(move || db().product_names());
     let known_stores = use_memo(move || db().stores());
+    let matching_packs = use_memo(move || {
+        let name = product();
+        if name.trim().is_empty() {
+            Vec::new()
+        } else {
+            db().packs_for(&name)
+                .into_iter()
+                .cloned()
+                .collect::<Vec<_>>()
+        }
+    });
     let recent = use_memo(move || {
         db().sorted_recent_first()
             .into_iter()
@@ -115,6 +133,36 @@ pub fn AddPage() -> Element {
             datalist { id: "known-products",
                 for name in known_products() {
                     option { key: "{name}", value: "{name}" }
+                }
+            }
+
+            // A one-shot shortcut, not an ongoing state: applying a pack fills
+            // Quantité/Unité below, then the select snaps back to its
+            // placeholder — see `chosen_pack`'s comment above. Packs are
+            // defined in Réglages.
+            if !matching_packs().is_empty() {
+                label { class: "field",
+                    span { class: "field-label", {t!("field-pack")} }
+                    select {
+                        class: "control",
+                        value: "{chosen_pack}",
+                        onchange: move |event| {
+                            let chosen = event.value();
+                            if let Some(pack) = matching_packs().into_iter().find(|p| p.id.to_string() == chosen)
+                            {
+                                quantity.set(format_number(pack.pieces));
+                                unit.set(InputUnit::Piece);
+                            }
+                            chosen_pack.set(String::new());
+                        },
+                        option { value: "", {t!("field-pack-none")} }
+                        for pack in matching_packs() {
+                            option { key: "{pack.id}", value: "{pack.id}",
+                                "{pack.label} · {format_number(pack.pieces)} "
+                                {t!("unit-piece")}
+                            }
+                        }
+                    }
                 }
             }
 
