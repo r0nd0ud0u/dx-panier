@@ -68,6 +68,8 @@ jobs:
         uses: softprops/action-gh-release@v2
         with:
           files: panier-web.zip
+          # A hyphenated tag (v0.0.1-rc.0) is a pre-release.
+          prerelease: ${{ contains(github.ref_name, '-') }}
 
   build-desktop:
     name: Upload Desktop Client Asset (${{ matrix.os }})
@@ -139,6 +141,8 @@ jobs:
         uses: softprops/action-gh-release@v2
         with:
           files: panier-desktop-*.zip
+          # A hyphenated tag (v0.0.1-rc.0) is a pre-release.
+          prerelease: ${{ contains(github.ref_name, '-') }}
 
   build-android:
     name: Upload Android Client Asset (arm64-v8a)
@@ -289,3 +293,5 @@ jobs:
         uses: softprops/action-gh-release@v2
         with:
           files: bundle-android/*.apk
+          # A hyphenated tag (v0.0.1-rc.0) is a pre-release.
+          prerelease: ${{ contains(github.ref_name, '-') }}
