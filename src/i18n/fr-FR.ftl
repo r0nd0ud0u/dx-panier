@@ -14,6 +14,7 @@ field-note = Note
 field-note-placeholder = Marque, promotion…
 field-product-placeholder = Beurre doux
 field-store-placeholder = Lidl
+field-piece-weight = Poids d'une pièce (optionnel)
 
 unit-kg = kilo
 unit-g = gramme
@@ -26,11 +27,14 @@ action-delete = Supprimer
 action-cancel = Annuler
 action-confirm = Confirmer
 action-import = Importer
+action-export = Exporter
+action-back = Retour
 
 error-product = Indique un produit.
 error-store = Indique un magasin.
 error-price = Prix invalide — écris par exemple 2,45.
 error-quantity = Quantité invalide — elle doit être supérieure à zéro.
+error-piece-weight = Poids invalide — laisse ce champ vide si tu ne le connais pas.
 
 recent-title = Derniers ajouts
 recent-empty = Aucun achat enregistré pour l'instant.
@@ -54,6 +58,7 @@ trend-down = En baisse
 trend-flat = Stable
 trend-new = Premier relevé
 
+detail-not-found-title = Produit introuvable
 detail-not-found = Ce produit n'existe plus.
 detail-evolution = Évolution du prix unitaire
 detail-by-store = Comparatif par magasin
@@ -71,9 +76,16 @@ settings-language = Langue
 settings-data = Données
 settings-stats = { $purchases } achats · { $products } produits · { $stores } magasins
 settings-export = Sauvegarde
+# Android uniquement — le bouton d'export par fichier n'y est pas disponible ;
+# voir le commentaire sur `BackupSection` (feature = "mobile") dans settings.rs.
 settings-export-help = Copie ce texte et garde-le en lieu sûr.
+settings-backup-help = Enregistre tes achats dans un fichier JSON, à garder en lieu sûr.
+settings-export-done = Sauvegarde exportée.
+settings-export-error = Impossible d'enregistrer le fichier.
 settings-import = Restauration
+# Android uniquement, même limitation que settings-export-help ci-dessus.
 settings-import-help = Colle ici une sauvegarde. Elle remplacera tout l'historique actuel.
+settings-restore-help = Choisis un fichier de sauvegarde JSON. Il remplacera tout l'historique actuel.
 settings-import-error = Sauvegarde illisible — rien n'a été modifié.
 settings-import-done =
     { $count ->

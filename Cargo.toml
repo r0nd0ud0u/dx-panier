@@ -29,6 +29,14 @@ chrono = { version = "0.4.45", features = ["serde"] }
 getrandom = { version = "0.3.4", features = ["wasm_js"] }
 
 dioxus-desktop = { version = "0.7.10", optional = true }
+# Native save dialog for exporting a backup file — see src/pages/settings.rs.
+# Already resolved at this exact version as dioxus-desktop's own dependency (it
+# uses the same crate for the desktop side of `<input type="file">`); declaring
+# it ourselves only exposes the save-dialog half dioxus itself doesn't need.
+# Not available on Android — rfd has no backend there — so not pulled into the
+# "mobile" feature at all; see the cfg(feature = "mobile") fallback in
+# settings.rs for what ships instead.
+rfd = { version = "0.17.2", optional = true }
 # Decodes assets/icon-512.png into raw RGBA at startup for tao's Icon::from_rgba, so
 # `dx serve --platform desktop` shows the app icon in the taskbar too — the
 # [bundle].icon path in Dioxus.toml only reaches `dx bundle` packaging, not the
@@ -46,7 +54,7 @@ glib = { version = "0.22.9", optional = true }
 [features]
 default = ["web"]
 web = ["dioxus/web"]
-desktop = ["dioxus/desktop", "dep:dioxus-desktop", "dep:image", "dep:glib"]
+desktop = ["dioxus/desktop", "dep:dioxus-desktop", "dep:image", "dep:glib", "dep:rfd"]
 mobile = ["dioxus/mobile"]
 
 [profile]

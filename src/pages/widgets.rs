@@ -8,6 +8,28 @@ use crate::model::{
 use crate::pages::DATE_FORMAT;
 use crate::storage::use_db;
 
+/// Returns to whichever list the user drilled in from — Produits or Où
+/// acheter both link to the same detail page, and neither tab is shown as
+/// active while it is open, so without this there is no way back except a
+/// platform back gesture that a chromeless webview may not even offer.
+///
+/// History-based rather than a fixed destination, precisely because the same
+/// page has two different callers: `navigator().go_back()` returns to
+/// whichever of them is actually on the stack.
+#[component]
+pub fn BackButton() -> Element {
+    let nav = navigator();
+    rsx! {
+        button {
+            class: "icon-button back-button",
+            "aria-label": t!("action-back"),
+            disabled: !nav.can_go_back(),
+            onclick: move |_| nav.go_back(),
+            "‹"
+        }
+    }
+}
+
 pub fn input_unit_label(unit: InputUnit) -> String {
     match unit {
         InputUnit::Kg => t!("unit-kg"),

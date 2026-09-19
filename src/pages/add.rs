@@ -18,6 +18,8 @@ pub fn AddPage() -> Element {
     let mut price = use_signal(String::new);
     let mut quantity = use_signal(|| "1".to_owned());
     let mut unit = use_signal(InputUnit::default);
+    // Only meaningful for InputUnit::Piece — see the field's comment below.
+    let mut piece_weight = use_signal(String::new);
     let mut date = use_signal(|| today().format(DATE_FORMAT).to_string());
     let mut note = use_signal(String::new);
     let mut error: Signal<Option<String>> = use_signal(|| None);
@@ -50,10 +52,23 @@ pub fn AddPage() -> Element {
             error.set(Some(t!("error-quantity")));
             return;
         };
+        // Blank is "not given", not zero — the field is optional and only shown
+        // for InputUnit::Piece to begin with.
+        let piece_weight_kg = if unit() == InputUnit::Piece && !piece_weight().trim().is_empty() {
+            let Some(weight) = parse_quantity(&piece_weight()) else {
+                error.set(Some(t!("error-piece-weight")));
+                return;
+            };
+            Some(weight)
+        } else {
+            None
+        };
         let day = NaiveDate::parse_from_str(&date(), DATE_FORMAT).unwrap_or_else(|_| today());
         let note_text = normalize(&note());
-        // 250 g is stored as 0.25 kg — see `InputUnit`.
-        let (canonical_unit, canonical_quantity) = unit().to_canonical(quantity_value);
+        // 250 g is stored as 0.25 kg, and 4 pieces at 150 g each as 0.6 kg — see
+        // `InputUnit::to_canonical_weighted`.
+        let (canonical_unit, canonical_quantity) =
+            unit().to_canonical_weighted(quantity_value, piece_weight_kg);
 
         let purchase = Purchase {
             id: db.read().next_id(),
@@ -73,6 +88,10 @@ pub fn AddPage() -> Element {
         product.set(String::new());
         price.set(String::new());
         quantity.set("1".to_owned());
+        // Unlike store/date/unit, a per-item weight describes this specific
+        // batch (these kiwis, today), not the shopping trip — it does not
+        // survive to the next line.
+        piece_weight.set(String::new());
         note.set(String::new());
     };
 
@@ -164,6 +183,26 @@ pub fn AddPage() -> Element {
                         r#type: "date",
                         value: "{date}",
                         oninput: move |event| date.set(event.value()),
+                    }
+                }
+            }
+
+            // Lets a per-item purchase (kiwis sold loose, "4 pièces") join the
+            // same comparison as one entered by weight ("600 g") — see
+            // `InputUnit::to_canonical_weighted`. Shown only for Piece: a
+            // weight already means something else — the quantity itself — for
+            // every other unit.
+            if unit() == InputUnit::Piece {
+                label { class: "field",
+                    span { class: "field-label", {t!("field-piece-weight")} }
+                    input {
+                        class: "control",
+                        inputmode: "decimal",
+                        value: "{piece_weight}",
+                        // A literal example, not translated — see the price
+                        // field's placeholder just below for the same choice.
+                        placeholder: "0,150",
+                        oninput: move |event| piece_weight.set(event.value()),
                     }
                 }
             }

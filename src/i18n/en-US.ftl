@@ -14,6 +14,7 @@ field-note = Note
 field-note-placeholder = Brand, special offer…
 field-product-placeholder = Butter
 field-store-placeholder = Lidl
+field-piece-weight = Weight per piece (optional)
 
 unit-kg = kilo
 unit-g = gram
@@ -26,11 +27,14 @@ action-delete = Delete
 action-cancel = Cancel
 action-confirm = Confirm
 action-import = Import
+action-export = Export
+action-back = Back
 
 error-product = Enter a product.
 error-store = Enter a store.
 error-price = Invalid price — write 2.45, for example.
 error-quantity = Invalid quantity — it must be greater than zero.
+error-piece-weight = Invalid weight — leave this field empty if you don't know it.
 
 recent-title = Latest entries
 recent-empty = Nothing recorded yet.
@@ -54,6 +58,7 @@ trend-down = Going down
 trend-flat = Steady
 trend-new = First entry
 
+detail-not-found-title = Product not found
 detail-not-found = This product no longer exists.
 detail-evolution = Unit price over time
 detail-by-store = Store by store
@@ -71,9 +76,16 @@ settings-language = Language
 settings-data = Data
 settings-stats = { $purchases } purchases · { $products } products · { $stores } stores
 settings-export = Backup
+# Android only — the file-export button isn't available there; see the
+# comment on `BackupSection` (feature = "mobile") in settings.rs.
 settings-export-help = Copy this text and keep it somewhere safe.
+settings-backup-help = Save your purchases to a JSON file, and keep it somewhere safe.
+settings-export-done = Backup exported.
+settings-export-error = Couldn't save the file.
 settings-import = Restore
+# Android only, same limitation as settings-export-help above.
 settings-import-help = Paste a backup here. It will replace the entire current history.
+settings-restore-help = Choose a JSON backup file. It will replace the entire current history.
 settings-import-error = Unreadable backup — nothing was changed.
 settings-import-done =
     { $count ->

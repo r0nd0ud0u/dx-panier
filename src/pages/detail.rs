@@ -3,7 +3,7 @@ use dioxus_i18n::t;
 
 use crate::model::format_unit_price;
 use crate::pages::DATE_FORMAT;
-use crate::pages::widgets::{HistoryRow, Sparkline, TrendBadge};
+use crate::pages::widgets::{BackButton, HistoryRow, Sparkline, TrendBadge};
 use crate::storage::use_db;
 
 /// One product: how its unit price moved, how the stores compare, and every line
@@ -26,6 +26,12 @@ pub fn ProductDetailPage(product_id: u64) -> Element {
 
     let Some(summary) = summary() else {
         return rsx! {
+            header { class: "page-header",
+                div { class: "page-header-start",
+                    BackButton {}
+                    h1 { {t!("detail-not-found-title")} }
+                }
+            }
             p { class: "muted", {t!("detail-not-found")} }
         };
     };
@@ -44,7 +50,10 @@ pub fn ProductDetailPage(product_id: u64) -> Element {
 
     rsx! {
         header { class: "page-header",
-            h1 { "{summary.product}" }
+            div { class: "page-header-start",
+                BackButton {}
+                h1 { "{summary.product}" }
+            }
             TrendBadge { trend: summary.trend() }
         }
 

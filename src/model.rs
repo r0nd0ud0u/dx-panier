@@ -74,6 +74,23 @@ impl InputUnit {
             InputUnit::Piece => (Unit::Piece, quantity),
         }
     }
+
+    /// Same conversion, except a piece purchase given the weight of one item
+    /// becomes a weight purchase instead: 4 kiwis at 150 g each store as 0.6 kg,
+    /// the same bucket a purchase entered directly as "600 g" lands in. This is
+    /// how "bought by the piece" and "bought by weight" become comparable at
+    /// all — two purchases only ever compare when [`Self::to_canonical`] (or
+    /// this) gave them the same [`Unit`].
+    ///
+    /// `piece_weight_kg` is ignored for every other [`InputUnit`], and a weight
+    /// of zero or less is treated as absent rather than producing an infinite
+    /// or negative unit price.
+    pub fn to_canonical_weighted(self, quantity: f64, piece_weight_kg: Option<f64>) -> (Unit, f64) {
+        match (self, piece_weight_kg) {
+            (InputUnit::Piece, Some(weight)) if weight > 0.0 => (Unit::Kg, quantity * weight),
+            _ => self.to_canonical(quantity),
+        }
+    }
 }
 
 /// One line on one receipt: this product, at this store, on this day, for this price.
@@ -532,6 +549,56 @@ mod tests {
         db.insert(packet);
         // 2,45 € for 250 g is 9,80 € a kilo, and that is the number to compare.
         assert_eq!(db.summaries(None)[0].latest.unit_price(), 980.0);
+    }
+
+    #[test]
+    fn a_weighed_piece_purchase_joins_the_kg_bucket() {
+        // 4 kiwis at 150 g each is 600 g, comparable with kiwis bought by weight.
+        assert_eq!(
+            InputUnit::Piece.to_canonical_weighted(4.0, Some(0.150)),
+            (Unit::Kg, 0.6)
+        );
+        // No weight given: behaves exactly like the plain, unweighted conversion.
+        assert_eq!(
+            InputUnit::Piece.to_canonical_weighted(4.0, None),
+            InputUnit::Piece.to_canonical(4.0)
+        );
+        // A zero or negative weight is nonsensical, not "free" or "negative
+        // mass" — treated as absent rather than corrupting the comparison.
+        assert_eq!(
+            InputUnit::Piece.to_canonical_weighted(4.0, Some(0.0)),
+            (Unit::Piece, 4.0)
+        );
+        assert_eq!(
+            InputUnit::Piece.to_canonical_weighted(4.0, Some(-1.0)),
+            (Unit::Piece, 4.0)
+        );
+        // Ignored outside of Piece — a weight typed in and then abandoned by
+        // switching units back to Kg must not silently double-convert it.
+        assert_eq!(
+            InputUnit::Kg.to_canonical_weighted(2.0, Some(0.150)),
+            (Unit::Kg, 2.0)
+        );
+    }
+
+    #[test]
+    fn kiwis_bought_by_the_piece_and_by_weight_end_up_comparable() {
+        let mut db = Db::default();
+        // Aldi: kiwis sold loose, weighed at the till.
+        db.insert(purchase(1, "Kiwi", "Aldi", 300, 0.5, 1));
+        // Lidl: kiwis sold by the piece, 150 g each — 4 for 2,40 €.
+        let (unit, quantity) = InputUnit::Piece.to_canonical_weighted(4.0, Some(0.150));
+        let mut by_piece = purchase(2, "Kiwi", "Lidl", 240, quantity, 2);
+        by_piece.unit = unit;
+        db.insert(by_piece);
+
+        let summary = &db.summaries(None)[0];
+        // Both land in Unit::Kg, so both enter the same comparison instead of
+        // one being silently dropped as "a different kind of number".
+        assert_eq!(summary.unit, Unit::Kg);
+        assert_eq!(summary.stores.len(), 2);
+        // 3,00 €/0,5 kg = 6,00 €/kg at Aldi; 2,40 €/0,6 kg = 4,00 €/kg at Lidl.
+        assert_eq!(summary.best().unwrap().store, "Lidl");
     }
 
     #[test]
