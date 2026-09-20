@@ -148,7 +148,9 @@ pub fn AddPage() -> Element {
                         value: "{chosen_pack}",
                         onchange: move |event| {
                             let chosen = event.value();
-                            if let Some(pack) = matching_packs().into_iter().find(|p| p.id.to_string() == chosen)
+                            if let Some(pack) = matching_packs()
+                                .into_iter()
+                                .find(|p| p.id.to_string() == chosen)
                             {
                                 quantity.set(format_number(pack.pieces));
                                 unit.set(InputUnit::Piece);
@@ -214,11 +216,11 @@ pub fn AddPage() -> Element {
                     select {
                         class: "control",
                         value: "{unit().key()}",
-                        onchange: move |event| {
-                            unit.set(InputUnit::from_key(&event.value()).unwrap_or_default())
-                        },
+                        onchange: move |event| { unit.set(InputUnit::from_key(&event.value()).unwrap_or_default()) },
                         for option_unit in InputUnit::ALL {
-                            option { key: "{option_unit.key()}", value: "{option_unit.key()}",
+                            option {
+                                key: "{option_unit.key()}",
+                                value: "{option_unit.key()}",
                                 {input_unit_label(option_unit)}
                             }
                         }

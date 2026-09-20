@@ -11,10 +11,26 @@ pub fn Shell() -> Element {
         div { class: "app",
             main { class: "content", Outlet::<Route> {} }
             nav { class: "tabbar",
-                Tab { to: Route::AddPage {}, label: t!("nav-add"), icon: TabIcon::Add }
-                Tab { to: Route::ProductsPage {}, label: t!("nav-products"), icon: TabIcon::List }
-                Tab { to: Route::PlanPage {}, label: t!("nav-plan"), icon: TabIcon::Basket }
-                Tab { to: Route::SettingsPage {}, label: t!("nav-settings"), icon: TabIcon::Sliders }
+                Tab {
+                    to: Route::AddPage {},
+                    label: t!("nav-add"),
+                    icon: TabIcon::Add,
+                }
+                Tab {
+                    to: Route::ProductsPage {},
+                    label: t!("nav-products"),
+                    icon: TabIcon::List,
+                }
+                Tab {
+                    to: Route::PlanPage {},
+                    label: t!("nav-plan"),
+                    icon: TabIcon::Basket,
+                }
+                Tab {
+                    to: Route::SettingsPage {},
+                    label: t!("nav-settings"),
+                    icon: TabIcon::Sliders,
+                }
             }
         }
     }

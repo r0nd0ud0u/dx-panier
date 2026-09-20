@@ -28,7 +28,7 @@ pub fn PlanPage() -> Element {
             p { class: "muted", {t!("plan-empty")} }
         } else {
             p { class: "muted", {t!("plan-intro")} }
-            for (store , products) in plan() {
+            for (store, products) in plan() {
                 section { key: "{store}", class: "section",
                     h2 { "{store}" }
                     ul { class: "list",

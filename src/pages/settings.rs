@@ -39,8 +39,12 @@ pub fn SettingsPage() -> Element {
         section { class: "section",
             h2 { {t!("settings-data")} }
             p { class: "muted",
-                {t!("settings-stats", purchases : stats().0.to_string(), products : stats().1
-                .to_string(), stores : stats().2.to_string())}
+                {
+                    t!(
+                        "settings-stats", purchases : stats().0.to_string(), products : stats().1
+                        .to_string(), stores : stats().2.to_string()
+                    )
+                }
             }
             p { class: "muted", {t!("settings-storage")} }
         }
@@ -371,9 +375,7 @@ fn BackupSection(mut db: Signal<Db>, mut notice: Signal<Option<Notice>>) -> Elem
         section { class: "section",
             h2 { {t!("settings-export")} }
             p { class: "muted", {t!("settings-backup-help")} }
-            button {
-                class: "button",
-                onclick: move |_| export_to_disk(db, notice),
+            button { class: "button", onclick: move |_| export_to_disk(db, notice),
                 {t!("action-export")}
             }
         }
@@ -381,9 +383,7 @@ fn BackupSection(mut db: Signal<Db>, mut notice: Signal<Option<Notice>>) -> Elem
         section { class: "section",
             h2 { {t!("settings-import")} }
             p { class: "muted", {t!("settings-restore-help")} }
-            button {
-                class: "button",
-                onclick: move |_| found.set(find_backups()),
+            button { class: "button", onclick: move |_| found.set(find_backups()),
                 {t!("action-browse")}
             }
 

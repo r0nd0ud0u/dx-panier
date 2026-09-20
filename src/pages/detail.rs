@@ -65,7 +65,7 @@ pub fn ProductDetailPage(product_id: u64) -> Element {
         section { class: "section",
             h2 { {t!("detail-by-store")} }
             ul { class: "list",
-                for (rank , store) in summary.stores.iter().enumerate() {
+                for (rank, store) in summary.stores.iter().enumerate() {
                     li {
                         key: "{store.store}",
                         class: if rank == 0 { "row best-row" } else { "row" },

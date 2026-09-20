@@ -72,9 +72,7 @@ pub fn RecentRow(purchase: Purchase) -> Element {
             }
             div { class: "row-side",
                 span { class: "price", {format_cents(purchase.price_cents)} }
-                span { class: "row-sub",
-                    {format_unit_price(purchase.unit_price(), purchase.unit)}
-                }
+                span { class: "row-sub", {format_unit_price(purchase.unit_price(), purchase.unit)} }
             }
             button {
                 class: "icon-button",
@@ -112,9 +110,7 @@ pub fn HistoryRow(purchase: Purchase) -> Element {
             }
             div { class: "row-side",
                 span { class: "price", {format_cents(purchase.price_cents)} }
-                span { class: "row-sub",
-                    {format_unit_price(purchase.unit_price(), purchase.unit)}
-                }
+                span { class: "row-sub", {format_unit_price(purchase.unit_price(), purchase.unit)} }
             }
             button {
                 class: "icon-button",
@@ -196,8 +192,14 @@ pub fn Sparkline(points: Vec<(NaiveDate, f64)>, unit: Unit) -> Element {
                 role: "img",
                 polygon { class: "chart-area", points: "{area}" }
                 polyline { class: "chart-line", points: "{line}" }
-                for (index , (x , y)) in coords.iter().enumerate() {
-                    circle { key: "{index}", class: "chart-dot", cx: "{x}", cy: "{y}", r: "2.5" }
+                for (index, (x, y)) in coords.iter().enumerate() {
+                    circle {
+                        key: "{index}",
+                        class: "chart-dot",
+                        cx: "{x}",
+                        cy: "{y}",
+                        r: "2.5",
+                    }
                 }
             }
             div { class: "chart-scale",
