@@ -417,7 +417,12 @@ fn BackupSection(mut db: Signal<Db>, mut notice: Signal<Option<Notice>>) -> Elem
         }
 
         if let Some(mode) = browsing() {
-            FileBrowser { mode, db, notice, browsing }
+            FileBrowser {
+                mode,
+                db,
+                notice,
+                browsing,
+            }
         }
 
         BackupNotice { notice }
@@ -484,18 +489,16 @@ fn FileBrowser(
                     ul { class: "list",
                         if let Some(parent) = dir().parent().map(|p| p.to_path_buf()) {
                             li { class: "row",
-                                button {
-                                    class: "button",
-                                    onclick: move |_| dir.set(parent.clone()),
-                                    ".."
-                                }
+                                button { class: "button", onclick: move |_| dir.set(parent.clone()), ".." }
                             }
                         }
                         for entry in listing {
                             li { key: "{entry.path}", class: "row",
                                 div { class: "row-main",
                                     span { class: "row-title",
-                                        if entry.is_dir { "📁 " }
+                                        if entry.is_dir {
+                                            "📁 "
+                                        }
                                         "{entry.label}"
                                     }
                                 }
@@ -546,11 +549,7 @@ fn FileBrowser(
                 }
             }
 
-            button {
-                class: "button",
-                onclick: move |_| browsing.set(None),
-                {t!("action-cancel")}
-            }
+            button { class: "button", onclick: move |_| browsing.set(None), {t!("action-cancel")} }
         }
     }
 }
