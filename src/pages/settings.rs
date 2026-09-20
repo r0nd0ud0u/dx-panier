@@ -196,12 +196,18 @@ fn PacksSection(mut db: Signal<Db>) -> Element {
     }
 }
 
-#[derive(Clone, Copy, PartialEq)]
+#[derive(Clone, PartialEq)]
 enum Notice {
     ImportDone(usize),
     ImportError,
+    /// Web and desktop only: there the file went wherever the dialog said.
+    #[cfg_attr(feature = "mobile", allow(dead_code))]
     ExportDone,
     ExportError,
+    /// Mobile only: where the file actually landed, which is the one thing the
+    /// user needs after an export that had no dialog to pick a location in.
+    #[cfg_attr(not(feature = "mobile"), allow(dead_code))]
+    ExportSaved(String),
 }
 
 #[component]
@@ -218,6 +224,10 @@ fn BackupNotice(notice: Signal<Option<Notice>>) -> Element {
         },
         Some(Notice::ExportError) => rsx! {
             p { class: "error", {t!("settings-export-error")} }
+        },
+        Some(Notice::ExportSaved(path)) => rsx! {
+            p { class: "notice", {t!("settings-export-saved")} }
+            p { class: "muted mono", "{path}" }
         },
         None => rsx! {},
     }
@@ -345,24 +355,17 @@ fn export(db: Signal<Db>, mut notice: Signal<Option<Notice>>) {
     });
 }
 
-/// Android's WebView has a real native file picker and share sheet — but
-/// neither `rfd` nor dioxus-desktop's own `<input type="file">` bridge (used
-/// above on web and desktop) reach them: dioxus intercepts every file input
-/// click itself (`window.addEventListener("click", ...)` in its JS runtime,
-/// shared by desktop and mobile alike) and asks Rust to run a native dialog —
-/// which on Android is a stub that answers with nothing. `import_native`
-/// and `export_share` below go around that stub entirely, straight to the
-/// browser platform APIs, which is why they need raw JS rather than the
-/// dioxus-rendered `<input>` the other `BackupSection` uses.
-///
-/// Untested on a real device — there was none available to build this
-/// against — so the copy-paste flow stays too, revealed only once a button
-/// above has actually failed, never hidden behind a guess that it won't.
+/// Android has no reachable file dialog: dioxus intercepts every
+/// `<input type="file">` click itself and asks Rust for a native dialog,
+/// which is a no-op there, and the Web Share API is not available either.
+/// So the backup is written straight to disk with `std::fs`, into the first
+/// directory Android actually lets the app write to, and restored by picking
+/// one of the `.json` files found back in those same directories.
 #[cfg(feature = "mobile")]
 #[component]
 fn BackupSection(mut db: Signal<Db>, mut notice: Signal<Option<Notice>>) -> Element {
     let mut import_text = use_signal(String::new);
-    let export_text = use_memo(move || serde_json::to_string(&db()).unwrap_or_default());
+    let mut found = use_signal(Vec::<std::path::PathBuf>::new);
 
     rsx! {
         section { class: "section",
@@ -370,12 +373,8 @@ fn BackupSection(mut db: Signal<Db>, mut notice: Signal<Option<Notice>>) -> Elem
             p { class: "muted", {t!("settings-backup-help")} }
             button {
                 class: "button",
-                onclick: move |_| export_share(db, notice),
+                onclick: move |_| export_to_disk(db, notice),
                 {t!("action-export")}
-            }
-            if notice() == Some(Notice::ExportError) {
-                p { class: "muted", {t!("settings-export-fallback-help")} }
-                textarea { class: "control mono", rows: "4", readonly: true, value: "{export_text}" }
             }
         }
 
@@ -384,26 +383,48 @@ fn BackupSection(mut db: Signal<Db>, mut notice: Signal<Option<Notice>>) -> Elem
             p { class: "muted", {t!("settings-restore-help")} }
             button {
                 class: "button",
-                onclick: move |_| import_native(db, notice),
-                {t!("action-import")}
+                onclick: move |_| found.set(find_backups()),
+                {t!("action-browse")}
             }
-            if notice() == Some(Notice::ImportError) {
-                p { class: "muted", {t!("settings-import-fallback-help")} }
-                textarea {
-                    class: "control mono",
-                    rows: "4",
-                    value: "{import_text}",
-                    oninput: move |event| import_text.set(event.value()),
+
+            if !found().is_empty() {
+                ul { class: "list",
+                    for path in found() {
+                        li { key: "{path.display()}", class: "row",
+                            div { class: "row-main",
+                                span { class: "row-title", "{file_name(&path)}" }
+                                span { class: "row-sub", "{parent_dir(&path)}" }
+                            }
+                            button {
+                                class: "button",
+                                onclick: move |_| {
+                                    match std::fs::read_to_string(&path) {
+                                        Ok(text) => apply_import(&text, &mut db, &mut notice),
+                                        Err(_) => notice.set(Some(Notice::ImportError)),
+                                    }
+                                },
+                                {t!("action-import")}
+                            }
+                        }
+                    }
                 }
-                button {
-                    class: "button",
-                    disabled: import_text().trim().is_empty(),
-                    onclick: move |_| {
-                        apply_import(&import_text(), &mut db, &mut notice);
-                        import_text.set(String::new());
-                    },
-                    {t!("action-import")}
-                }
+            }
+
+            p { class: "muted", {t!("settings-import-fallback-help")} }
+            textarea {
+                class: "control mono",
+                rows: "3",
+                value: "{import_text}",
+                oninput: move |event| import_text.set(event.value()),
+            }
+            button {
+                class: "button",
+                disabled: import_text().trim().is_empty(),
+                onclick: move |_| {
+                    apply_import(&import_text(), &mut db, &mut notice);
+                    import_text.set(String::new());
+                },
+                {t!("action-import")}
             }
         }
 
@@ -411,110 +432,64 @@ fn BackupSection(mut db: Signal<Db>, mut notice: Signal<Option<Notice>>) -> Elem
     }
 }
 
-/// Hands the backup to Android's share sheet ("Save to Drive", "Files", …) as
-/// a real file, via the Web Share API's file support (`navigator.share`
-/// with `files:`) — a plain script call, not a DOM element dioxus watches,
-/// so nothing here needs to dodge its file-input interception.
+/// Where Android lets this app write without asking for a permission, most
+/// useful first. Downloads only works on older releases — scoped storage
+/// blocks it from API 29 — and the last one is the app's own private
+/// directory, invisible to a file manager but always writable.
 #[cfg(feature = "mobile")]
-fn export_share(db: Signal<Db>, mut notice: Signal<Option<Notice>>) {
-    const SCRIPT: &str = r#"
-        const json = await dioxus.recv();
-        const name = await dioxus.recv();
-        const file = new File([json], name, { type: "application/json" });
-        if (!navigator.canShare || !navigator.canShare({ files: [file] })) {
-            return "unsupported";
-        }
-        try {
-            await navigator.share({ files: [file] });
-            return "ok";
-        } catch (e) {
-            // The user closing the share sheet without picking anything is
-            // not a failure worth falling back over.
-            return (e && e.name === "AbortError") ? "cancelled" : "error";
-        }
-    "#;
+const BACKUP_DIRS: [&str; 3] = [
+    "/storage/emulated/0/Download",
+    "/storage/emulated/0/Android/data/io.github.r0ndoudou.panier/files",
+    "/data/data/io.github.r0ndoudou.panier/files/panier",
+];
+
+#[cfg(feature = "mobile")]
+fn file_name(path: &std::path::Path) -> String {
+    path.file_name()
+        .unwrap_or_default()
+        .to_string_lossy()
+        .into_owned()
+}
+
+#[cfg(feature = "mobile")]
+fn parent_dir(path: &std::path::Path) -> String {
+    path.parent().unwrap_or(path).to_string_lossy().into_owned()
+}
+
+/// Writes the backup to the first directory that accepts it, and reports the
+/// full path — without it the file would be saved somewhere the user has no
+/// way to guess.
+#[cfg(feature = "mobile")]
+fn export_to_disk(db: Signal<Db>, mut notice: Signal<Option<Notice>>) {
     let json = serde_json::to_string_pretty(&db()).unwrap_or_default();
-    spawn(async move {
-        let eval = document::eval(SCRIPT);
-        if eval.send(json).is_err() || eval.send(EXPORT_FILE_NAME).is_err() {
-            notice.set(Some(Notice::ExportError));
+    for dir in BACKUP_DIRS {
+        let path = std::path::Path::new(dir).join(EXPORT_FILE_NAME);
+        if std::fs::create_dir_all(dir).is_ok() && std::fs::write(&path, &json).is_ok() {
+            notice.set(Some(Notice::ExportSaved(
+                path.to_string_lossy().into_owned(),
+            )));
             return;
         }
-        let status: String = eval
-            .await
-            .ok()
-            .and_then(|value| serde_json::from_value(value).ok())
-            .unwrap_or_else(|| "error".to_owned());
-        match status.as_str() {
-            "ok" => notice.set(Some(Notice::ExportDone)),
-            "cancelled" => {}
-            _ => notice.set(Some(Notice::ExportError)),
-        }
-    });
+    }
+    notice.set(Some(Notice::ExportError));
 }
 
-/// A JSON-only response from `import_native`'s script: which of "ok",
-/// "cancelled" or "error" it ended on, and the file's text when "ok".
+/// Every `.json` sitting in one of [`BACKUP_DIRS`] — the closest thing to
+/// browsing for a file that works without a picker.
 #[cfg(feature = "mobile")]
-#[derive(serde::Deserialize)]
-struct NativeImportResult {
-    status: String,
-    #[serde(default)]
-    text: String,
-}
-
-/// Opens Android's own file picker directly — bypassing dioxus's own
-/// file-input handling, which never reaches it (see `BackupSection`'s
-/// comment) — by creating a plain, undecorated `<input type="file">` outside
-/// dioxus's render tree and stopping its click from ever reaching the
-/// `window`-level listener dioxus installs. Cached on `window` so a second
-/// import reuses the same element rather than leaking one per attempt.
-#[cfg(feature = "mobile")]
-fn import_native(mut db: Signal<Db>, mut notice: Signal<Option<Notice>>) {
-    const SCRIPT: &str = r#"
-        return await new Promise((resolve) => {
-            if (!window.__panierFileInput) {
-                const input = document.createElement("input");
-                input.type = "file";
-                input.accept = ".json";
-                input.style.display = "none";
-                input.addEventListener("click", (e) => e.stopPropagation());
-                document.body.appendChild(input);
-                window.__panierFileInput = input;
+fn find_backups() -> Vec<std::path::PathBuf> {
+    let mut found = Vec::new();
+    for dir in BACKUP_DIRS {
+        let Ok(entries) = std::fs::read_dir(dir) else {
+            continue;
+        };
+        for entry in entries.flatten() {
+            let path = entry.path();
+            if path.extension().is_some_and(|ext| ext == "json") {
+                found.push(path);
             }
-            const input = window.__panierFileInput;
-            const finish = (result) => {
-                input.removeEventListener("change", onChange);
-                input.removeEventListener("cancel", onCancel);
-                resolve(result);
-            };
-            const onChange = () => {
-                const file = input.files && input.files[0];
-                if (!file) { finish({ status: "cancelled" }); return; }
-                file.text()
-                    .then((text) => finish({ status: "ok", text }))
-                    .catch(() => finish({ status: "error" }));
-            };
-            const onCancel = () => finish({ status: "cancelled" });
-            input.addEventListener("change", onChange);
-            input.addEventListener("cancel", onCancel);
-            // Otherwise picking the same file twice in a row does not fire
-            // "change" the second time — its value never appeared to change.
-            input.value = "";
-            input.click();
-        });
-    "#;
-    spawn(async move {
-        let result: Option<NativeImportResult> = document::eval(SCRIPT)
-            .await
-            .ok()
-            .and_then(|value| serde_json::from_value(value).ok());
-        match result {
-            Some(NativeImportResult { status, text }) if status == "ok" => {
-                apply_import(&text, &mut db, &mut notice);
-            }
-            Some(NativeImportResult { status, .. }) if status == "cancelled" => {}
-            _ => notice.set(Some(Notice::ImportError)),
         }
-    });
+    }
+    found.sort();
+    found
 }

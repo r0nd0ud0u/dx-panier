@@ -33,6 +33,7 @@ action-confirm = Confirm
 action-import = Import
 action-export = Export
 action-back = Back
+action-browse = Browse
 
 error-product = Enter a product.
 error-store = Enter a store.
@@ -88,11 +89,11 @@ settings-export = Backup
 settings-backup-help = Save your purchases to a JSON file, and keep it somewhere safe.
 settings-export-done = Backup exported.
 settings-export-error = Couldn't save the file.
-settings-export-fallback-help = Sharing didn't work on this device — copy this text instead.
+settings-export-saved = Backup saved to:
 settings-import = Restore
 settings-restore-help = Choose a JSON backup file. It will replace the entire current history.
 settings-import-error = Unreadable backup — nothing was changed.
-settings-import-fallback-help = The file picker didn't work on this device — paste a backup here instead.
+settings-import-fallback-help = Or paste a backup directly here.
 settings-import-done =
     { $count ->
         [one] { $count } purchase restored.

@@ -33,6 +33,7 @@ action-confirm = Confirmer
 action-import = Importer
 action-export = Exporter
 action-back = Retour
+action-browse = Parcourir
 
 error-product = Indique un produit.
 error-store = Indique un magasin.
@@ -88,11 +89,11 @@ settings-export = Sauvegarde
 settings-backup-help = Enregistre tes achats dans un fichier JSON, à garder en lieu sûr.
 settings-export-done = Sauvegarde exportée.
 settings-export-error = Impossible d'enregistrer le fichier.
-settings-export-fallback-help = Le partage n'a pas fonctionné sur cet appareil — copie ce texte à la place.
+settings-export-saved = Sauvegarde enregistrée dans :
 settings-import = Restauration
 settings-restore-help = Choisis un fichier de sauvegarde JSON. Il remplacera tout l'historique actuel.
 settings-import-error = Sauvegarde illisible — rien n'a été modifié.
-settings-import-fallback-help = Le sélecteur de fichier n'a pas fonctionné sur cet appareil — colle une sauvegarde ici.
+settings-import-fallback-help = Ou colle directement une sauvegarde ici.
 settings-import-done =
     { $count ->
         [one] { $count } achat restauré.
