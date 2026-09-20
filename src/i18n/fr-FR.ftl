@@ -19,6 +19,7 @@ field-pack = Pack
 field-pack-none = Quantité libre
 field-pack-label = Nom du pack
 field-pack-pieces = Nombre de pièces par pack
+field-file-name = Nom du fichier
 
 unit-kg = kilo
 unit-g = gramme
@@ -34,6 +35,9 @@ action-import = Importer
 action-export = Exporter
 action-back = Retour
 action-browse = Parcourir
+action-choose-folder = Choisir le dossier
+action-open = Ouvrir
+action-save-here = Enregistrer ici
 
 error-product = Indique un produit.
 error-store = Indique un magasin.
@@ -90,6 +94,7 @@ settings-backup-help = Enregistre tes achats dans un fichier JSON, à garder en 
 settings-export-done = Sauvegarde exportée.
 settings-export-error = Impossible d'enregistrer le fichier.
 settings-export-saved = Sauvegarde enregistrée dans :
+settings-browse = Explorateur
 settings-import = Restauration
 settings-restore-help = Choisis un fichier de sauvegarde JSON. Il remplacera tout l'historique actuel.
 settings-import-error = Sauvegarde illisible — rien n'a été modifié.

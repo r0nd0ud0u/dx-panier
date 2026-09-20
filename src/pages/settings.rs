@@ -362,52 +362,40 @@ fn export(db: Signal<Db>, mut notice: Signal<Option<Notice>>) {
 /// Android has no reachable file dialog: dioxus intercepts every
 /// `<input type="file">` click itself and asks Rust for a native dialog,
 /// which is a no-op there, and the Web Share API is not available either.
-/// So the backup is written straight to disk with `std::fs`, into the first
-/// directory Android actually lets the app write to, and restored by picking
-/// one of the `.json` files found back in those same directories.
+/// So this browses the filesystem itself with `std::fs` — pick a folder to
+/// write into, or a `.json` to read back — with a one-tap default for the
+/// common case of not caring where it goes.
 #[cfg(feature = "mobile")]
 #[component]
 fn BackupSection(mut db: Signal<Db>, mut notice: Signal<Option<Notice>>) -> Element {
     let mut import_text = use_signal(String::new);
-    let mut found = use_signal(Vec::<std::path::PathBuf>::new);
+    let mut browsing: Signal<Option<BrowseMode>> = use_signal(|| None);
 
     rsx! {
         section { class: "section",
             h2 { {t!("settings-export")} }
             p { class: "muted", {t!("settings-backup-help")} }
-            button { class: "button", onclick: move |_| export_to_disk(db, notice),
-                {t!("action-export")}
+            div { class: "field-row",
+                button {
+                    class: "button",
+                    onclick: move |_| export_to_disk(db, notice),
+                    {t!("action-export")}
+                }
+                button {
+                    class: "button",
+                    onclick: move |_| browsing.set(Some(BrowseMode::Export)),
+                    {t!("action-choose-folder")}
+                }
             }
         }
 
         section { class: "section",
             h2 { {t!("settings-import")} }
             p { class: "muted", {t!("settings-restore-help")} }
-            button { class: "button", onclick: move |_| found.set(find_backups()),
+            button {
+                class: "button",
+                onclick: move |_| browsing.set(Some(BrowseMode::Import)),
                 {t!("action-browse")}
-            }
-
-            if !found().is_empty() {
-                ul { class: "list",
-                    for path in found() {
-                        li { key: "{path.display()}", class: "row",
-                            div { class: "row-main",
-                                span { class: "row-title", "{file_name(&path)}" }
-                                span { class: "row-sub", "{parent_dir(&path)}" }
-                            }
-                            button {
-                                class: "button",
-                                onclick: move |_| {
-                                    match std::fs::read_to_string(&path) {
-                                        Ok(text) => apply_import(&text, &mut db, &mut notice),
-                                        Err(_) => notice.set(Some(Notice::ImportError)),
-                                    }
-                                },
-                                {t!("action-import")}
-                            }
-                        }
-                    }
-                }
             }
 
             p { class: "muted", {t!("settings-import-fallback-help")} }
@@ -428,7 +416,190 @@ fn BackupSection(mut db: Signal<Db>, mut notice: Signal<Option<Notice>>) -> Elem
             }
         }
 
+        if let Some(mode) = browsing() {
+            FileBrowser { mode, db, notice, browsing }
+        }
+
         BackupNotice { notice }
+    }
+}
+
+#[cfg(feature = "mobile")]
+#[derive(Clone, Copy, PartialEq)]
+enum BrowseMode {
+    Import,
+    Export,
+}
+
+/// Shortcuts to the directories worth starting from. Everything outside the
+/// app's own two is subject to Android's storage rules, so an unreadable one
+/// is listed but reports itself as such rather than being hidden.
+#[cfg(feature = "mobile")]
+const BROWSE_ROOTS: [&str; 4] = [
+    "/storage/emulated/0",
+    "/storage/emulated/0/Download",
+    "/storage/emulated/0/Android/data/io.github.r0ndoudou.panier/files",
+    "/data/data/io.github.r0ndoudou.panier/files/panier",
+];
+
+/// A plain directory listing walked with `std::fs` — the whole file dialog,
+/// since the platform will not lend us one.
+#[cfg(feature = "mobile")]
+#[component]
+fn FileBrowser(
+    mode: BrowseMode,
+    mut db: Signal<Db>,
+    mut notice: Signal<Option<Notice>>,
+    mut browsing: Signal<Option<BrowseMode>>,
+) -> Element {
+    let mut dir = use_signal(|| std::path::PathBuf::from(default_export_dir()));
+    let mut file_name = use_signal(|| EXPORT_FILE_NAME.to_owned());
+
+    // (label, full path) pairs: the closures below move the path out, so the
+    // label has to be a separate field to stay readable by the markup.
+    let entries = use_memo(move || list_dir(&dir()));
+
+    rsx! {
+        section { class: "section",
+            h2 { {t!("settings-browse")} }
+
+            div { class: "field-row",
+                for root in BROWSE_ROOTS {
+                    button {
+                        key: "{root}",
+                        class: "button",
+                        onclick: move |_| dir.set(std::path::PathBuf::from(root)),
+                        {short_name(root)}
+                    }
+                }
+            }
+
+            p { class: "muted mono", "{dir().display()}" }
+
+            match entries() {
+                Err(message) => rsx! {
+                    p { class: "error", "{message}" }
+                },
+                Ok(listing) => rsx! {
+                    ul { class: "list",
+                        if let Some(parent) = dir().parent().map(|p| p.to_path_buf()) {
+                            li { class: "row",
+                                button {
+                                    class: "button",
+                                    onclick: move |_| dir.set(parent.clone()),
+                                    ".."
+                                }
+                            }
+                        }
+                        for entry in listing {
+                            li { key: "{entry.path}", class: "row",
+                                div { class: "row-main",
+                                    span { class: "row-title",
+                                        if entry.is_dir { "📁 " }
+                                        "{entry.label}"
+                                    }
+                                }
+                                if entry.is_dir {
+                                    button {
+                                        class: "button",
+                                        onclick: move |_| dir.set(std::path::PathBuf::from(entry.path.clone())),
+                                        {t!("action-open")}
+                                    }
+                                } else if mode == BrowseMode::Import {
+                                    button {
+                                        class: "button",
+                                        onclick: move |_| {
+                                            match std::fs::read_to_string(&entry.path) {
+                                                Ok(text) => {
+                                                    apply_import(&text, &mut db, &mut notice);
+                                                    browsing.set(None);
+                                                }
+                                                Err(_) => notice.set(Some(Notice::ImportError)),
+                                            }
+                                        },
+                                        {t!("action-import")}
+                                    }
+                                }
+                            }
+                        }
+                    }
+                },
+            }
+
+            if mode == BrowseMode::Export {
+                label { class: "field",
+                    span { class: "field-label", {t!("field-file-name")} }
+                    input {
+                        class: "control",
+                        value: "{file_name}",
+                        oninput: move |event| file_name.set(event.value()),
+                    }
+                }
+                button {
+                    class: "button primary",
+                    onclick: move |_| {
+                        if write_backup(&dir().join(file_name()), db, notice) {
+                            browsing.set(None);
+                        }
+                    },
+                    {t!("action-save-here")}
+                }
+            }
+
+            button {
+                class: "button",
+                onclick: move |_| browsing.set(None),
+                {t!("action-cancel")}
+            }
+        }
+    }
+}
+
+#[cfg(feature = "mobile")]
+#[derive(Clone, PartialEq)]
+struct Entry {
+    label: String,
+    path: String,
+    is_dir: bool,
+}
+
+/// Directories first, then `.json` files — nothing else is useful here, and a
+/// phone's storage root is otherwise a wall of noise.
+#[cfg(feature = "mobile")]
+fn list_dir(dir: &std::path::Path) -> Result<Vec<Entry>, String> {
+    let read = std::fs::read_dir(dir).map_err(|error| error.to_string())?;
+    let mut dirs = Vec::new();
+    let mut files = Vec::new();
+    for entry in read.flatten() {
+        let path = entry.path();
+        let Some(label) = path.file_name().map(|n| n.to_string_lossy().into_owned()) else {
+            continue;
+        };
+        let item = Entry {
+            label,
+            path: path.to_string_lossy().into_owned(),
+            is_dir: path.is_dir(),
+        };
+        if item.is_dir {
+            dirs.push(item);
+        } else if path.extension().is_some_and(|ext| ext == "json") {
+            files.push(item);
+        }
+    }
+    dirs.sort_by(|a, b| a.label.cmp(&b.label));
+    files.sort_by(|a, b| a.label.cmp(&b.label));
+    dirs.extend(files);
+    Ok(dirs)
+}
+
+#[cfg(feature = "mobile")]
+fn short_name(path: &str) -> String {
+    match path {
+        "/storage/emulated/0" => "Stockage".to_owned(),
+        _ => std::path::Path::new(path)
+            .file_name()
+            .map(|n| n.to_string_lossy().into_owned())
+            .unwrap_or_else(|| path.to_owned()),
     }
 }
 
@@ -443,53 +614,50 @@ const BACKUP_DIRS: [&str; 3] = [
     "/data/data/io.github.r0ndoudou.panier/files/panier",
 ];
 
+/// The first of [`BACKUP_DIRS`] that actually accepts a file, so the browser
+/// and the one-tap export both open somewhere that works.
 #[cfg(feature = "mobile")]
-fn file_name(path: &std::path::Path) -> String {
-    path.file_name()
-        .unwrap_or_default()
-        .to_string_lossy()
-        .into_owned()
+fn default_export_dir() -> &'static str {
+    BACKUP_DIRS
+        .into_iter()
+        .find(|dir| {
+            std::fs::create_dir_all(dir).is_ok()
+                && std::fs::write(std::path::Path::new(dir).join(".panier-probe"), b"").is_ok()
+        })
+        .inspect(|dir| {
+            let _ = std::fs::remove_file(std::path::Path::new(dir).join(".panier-probe"));
+        })
+        .unwrap_or(BACKUP_DIRS[BACKUP_DIRS.len() - 1])
 }
 
+/// Reports the full path on success — without it the file would be saved
+/// somewhere the user has no way to guess.
 #[cfg(feature = "mobile")]
-fn parent_dir(path: &std::path::Path) -> String {
-    path.parent().unwrap_or(path).to_string_lossy().into_owned()
-}
-
-/// Writes the backup to the first directory that accepts it, and reports the
-/// full path — without it the file would be saved somewhere the user has no
-/// way to guess.
-#[cfg(feature = "mobile")]
-fn export_to_disk(db: Signal<Db>, mut notice: Signal<Option<Notice>>) {
+fn write_backup(
+    path: &std::path::Path,
+    db: Signal<Db>,
+    mut notice: Signal<Option<Notice>>,
+) -> bool {
     let json = serde_json::to_string_pretty(&db()).unwrap_or_default();
-    for dir in BACKUP_DIRS {
-        let path = std::path::Path::new(dir).join(EXPORT_FILE_NAME);
-        if std::fs::create_dir_all(dir).is_ok() && std::fs::write(&path, &json).is_ok() {
+    if let Some(parent) = path.parent() {
+        let _ = std::fs::create_dir_all(parent);
+    }
+    match std::fs::write(path, &json) {
+        Ok(()) => {
             notice.set(Some(Notice::ExportSaved(
                 path.to_string_lossy().into_owned(),
             )));
-            return;
+            true
+        }
+        Err(_) => {
+            notice.set(Some(Notice::ExportError));
+            false
         }
     }
-    notice.set(Some(Notice::ExportError));
 }
 
-/// Every `.json` sitting in one of [`BACKUP_DIRS`] — the closest thing to
-/// browsing for a file that works without a picker.
 #[cfg(feature = "mobile")]
-fn find_backups() -> Vec<std::path::PathBuf> {
-    let mut found = Vec::new();
-    for dir in BACKUP_DIRS {
-        let Ok(entries) = std::fs::read_dir(dir) else {
-            continue;
-        };
-        for entry in entries.flatten() {
-            let path = entry.path();
-            if path.extension().is_some_and(|ext| ext == "json") {
-                found.push(path);
-            }
-        }
-    }
-    found.sort();
-    found
+fn export_to_disk(db: Signal<Db>, notice: Signal<Option<Notice>>) {
+    let path = std::path::Path::new(default_export_dir()).join(EXPORT_FILE_NAME);
+    write_backup(&path, db, notice);
 }

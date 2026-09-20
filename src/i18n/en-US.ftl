@@ -19,6 +19,7 @@ field-pack = Pack
 field-pack-none = Free quantity
 field-pack-label = Pack name
 field-pack-pieces = Pieces per pack
+field-file-name = File name
 
 unit-kg = kilo
 unit-g = gram
@@ -34,6 +35,9 @@ action-import = Import
 action-export = Export
 action-back = Back
 action-browse = Browse
+action-choose-folder = Choose folder
+action-open = Open
+action-save-here = Save here
 
 error-product = Enter a product.
 error-store = Enter a store.
@@ -90,6 +94,7 @@ settings-backup-help = Save your purchases to a JSON file, and keep it somewhere
 settings-export-done = Backup exported.
 settings-export-error = Couldn't save the file.
 settings-export-saved = Backup saved to:
+settings-browse = File browser
 settings-import = Restore
 settings-restore-help = Choose a JSON backup file. It will replace the entire current history.
 settings-import-error = Unreadable backup — nothing was changed.
