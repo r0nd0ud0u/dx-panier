@@ -35,7 +35,7 @@ jobs:
           cache-all-crates: "true"
 
       - name: Install cargo-binstall
-        uses: cargo-bins/cargo-binstall@v1.21.0
+        uses: cargo-bins/cargo-binstall@v1.23.0
 
       # binstall's default `--strategies` list ends in `compile` as a silent
       # last-resort fallback if fetching the prebuilt asset ever hiccups. That
