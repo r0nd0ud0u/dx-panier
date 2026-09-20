@@ -6,6 +6,7 @@
 
 use chrono::NaiveDate;
 use serde::{Deserialize, Serialize};
+use std::collections::{HashMap, HashSet};
 
 /// The unit a quantity is expressed in.
 #[derive(Clone, Copy, Debug, Default, PartialEq, Eq, Serialize, Deserialize)]
@@ -216,13 +217,30 @@ impl ProductSummary {
 
 /// Collapses runs of whitespace so `"  Lait   demi "` and `"Lait demi"` are one product.
 pub fn normalize(value: &str) -> String {
-    value.split_whitespace().collect::<Vec<_>>().join(" ")
+    let mut out = String::with_capacity(value.len());
+    for word in value.split_whitespace() {
+        if !out.is_empty() {
+            out.push(' ');
+        }
+        out.push_str(word);
+    }
+    out
 }
 
 /// Grouping key: normalized and case-folded, so `Lidl` and `lidl` are one store.
 /// The spelling shown to the user is always the most recent one entered.
+/// Built in one pass rather than `normalize(value).to_lowercase()`: this runs
+/// once per purchase per comparison all over this module, and the two-step
+/// version allocated three times where one will do.
 pub fn fold_key(value: &str) -> String {
-    normalize(value).to_lowercase()
+    let mut out = String::with_capacity(value.len());
+    for word in value.split_whitespace() {
+        if !out.is_empty() {
+            out.push(' ');
+        }
+        out.extend(word.chars().flat_map(char::to_lowercase));
+    }
+    out
 }
 
 impl Db {
@@ -270,25 +288,32 @@ impl Db {
     }
 
     fn distinct_by(&self, field: impl Fn(&Purchase) -> &String) -> Vec<String> {
-        let mut seen = Vec::new();
-        for purchase in self.sorted_recent_first() {
-            let value = field(&purchase);
-            if !seen
-                .iter()
-                .any(|kept: &String| fold_key(kept) == fold_key(value))
-            {
-                seen.push(value.clone());
+        // A set of the folded keys, not a scan of what is already kept: the
+        // scan compared every candidate against every name found so far, and
+        // folded both sides afresh each time.
+        let mut seen = HashSet::new();
+        let mut kept = Vec::new();
+        for purchase in self.sorted_refs() {
+            let value = field(purchase);
+            if seen.insert(fold_key(value)) {
+                kept.push(value.clone());
             }
         }
-        seen
+        kept
+    }
+
+    /// Newest first, as references — the ordering of
+    /// [`Self::sorted_recent_first`] without copying every purchase to get it.
+    fn sorted_refs(&self) -> Vec<&Purchase> {
+        let mut refs: Vec<&Purchase> = self.purchases.iter().collect();
+        refs.sort_by(|a, b| b.date.cmp(&a.date).then(b.id.cmp(&a.id)));
+        refs
     }
 
     /// Every purchase, newest first. Ties broken by id so the order is total and a
     /// same-day correction still lands after the line it corrects.
     pub fn sorted_recent_first(&self) -> Vec<Purchase> {
-        let mut purchases = self.purchases.clone();
-        purchases.sort_by(|a, b| b.date.cmp(&a.date).then(b.id.cmp(&a.id)));
-        purchases
+        self.sorted_refs().into_iter().cloned().collect()
     }
 
     /// Full history of one product, newest first, every unit included.
@@ -318,78 +343,42 @@ impl Db {
     pub fn summaries(&self, store_filter: Option<&str>) -> Vec<ProductSummary> {
         let store_filter = store_filter.map(fold_key);
         let mut summaries: Vec<ProductSummary> = self
-            .product_names()
+            .grouped_by_product()
             .into_iter()
-            .filter_map(|product| self.summarize(&product, store_filter.as_deref()))
+            .filter_map(|history| summarize(history, store_filter.as_deref()))
             .collect();
         summaries.sort_by_key(|summary| fold_key(&summary.product));
         summaries
+    }
+
+    /// Every product's purchases, newest first, in one pass over the list.
+    ///
+    /// The point is that it is *one* pass: asking for each product's history
+    /// separately walked the whole list once per product, so a shopping
+    /// history twice the size cost four times as much to display.
+    fn grouped_by_product(&self) -> Vec<Vec<Purchase>> {
+        let mut index: HashMap<String, usize> = HashMap::new();
+        let mut groups: Vec<Vec<Purchase>> = Vec::new();
+        for purchase in &self.purchases {
+            match index.get(&fold_key(&purchase.product)) {
+                Some(&at) => groups[at].push(purchase.clone()),
+                None => {
+                    index.insert(fold_key(&purchase.product), groups.len());
+                    groups.push(vec![purchase.clone()]);
+                }
+            }
+        }
+        for group in &mut groups {
+            group.sort_by(|a, b| b.date.cmp(&a.date).then(b.id.cmp(&a.id)));
+        }
+        groups
     }
 
     /// The one summary a product detail page needs — without computing (and
     /// discarding) every other product's, the way `summaries(None).find(...)`
     /// would.
     pub fn summary_for(&self, product: &str) -> Option<ProductSummary> {
-        self.summarize(product, None)
-    }
-
-    fn summarize(&self, product: &str, store_filter: Option<&str>) -> Option<ProductSummary> {
-        let history = self.history(product);
-        let visible: Vec<&Purchase> = history
-            .iter()
-            .filter(|purchase| store_filter.is_none_or(|store| fold_key(&purchase.store) == store))
-            .collect();
-        let latest = (*visible.first()?).clone();
-
-        // Same unit only — see the `unit` field's comment on ProductSummary.
-        let comparable: Vec<&Purchase> = history
-            .iter()
-            .filter(|purchase| purchase.unit == latest.unit)
-            .collect();
-        let previous_unit_price = visible
-            .iter()
-            .skip(1)
-            .find(|purchase| purchase.unit == latest.unit)
-            .map(|purchase| purchase.unit_price());
-
-        let mut stores: Vec<StorePrice> = Vec::new();
-        for purchase in &comparable {
-            let key = fold_key(&purchase.store);
-            match stores
-                .iter_mut()
-                .find(|entry| fold_key(&entry.store) == key)
-            {
-                // `comparable` is newest first, so the first sighting carries the
-                // store's latest price and spelling; later ones only feed the mean.
-                Some(entry) => {
-                    entry.avg_unit_price = (entry.avg_unit_price * entry.count as f64
-                        + purchase.unit_price())
-                        / (entry.count + 1) as f64;
-                    entry.count += 1;
-                }
-                None => stores.push(StorePrice {
-                    store: purchase.store.clone(),
-                    avg_unit_price: purchase.unit_price(),
-                    last_date: purchase.date,
-                    count: 1,
-                }),
-            }
-        }
-        stores.sort_by(|a, b| {
-            a.avg_unit_price
-                .partial_cmp(&b.avg_unit_price)
-                .unwrap_or(std::cmp::Ordering::Equal)
-                .then_with(|| fold_key(&a.store).cmp(&fold_key(&b.store)))
-        });
-
-        Some(ProductSummary {
-            product: latest.product.clone(),
-            unit: latest.unit,
-            latest,
-            previous_unit_price,
-            stores,
-            purchase_count: history.len(),
-        })
+        summarize(self.history(product), None)
     }
 
     /// Resolves a [`product_key`] back to the product's current display name.
@@ -427,6 +416,68 @@ impl Db {
         });
         plan
     }
+}
+
+/// Folds one product's purchases — newest first — into the row a list shows.
+///
+/// Takes the history rather than looking it up so that `summaries` can group
+/// the whole database once and hand each group straight over.
+fn summarize(history: Vec<Purchase>, store_filter: Option<&str>) -> Option<ProductSummary> {
+    let visible: Vec<&Purchase> = history
+        .iter()
+        .filter(|purchase| store_filter.is_none_or(|store| fold_key(&purchase.store) == store))
+        .collect();
+    let latest = (*visible.first()?).clone();
+
+    // Same unit only — see the `unit` field's comment on ProductSummary.
+    let comparable: Vec<&Purchase> = history
+        .iter()
+        .filter(|purchase| purchase.unit == latest.unit)
+        .collect();
+    let previous_unit_price = visible
+        .iter()
+        .skip(1)
+        .find(|purchase| purchase.unit == latest.unit)
+        .map(|purchase| purchase.unit_price());
+
+    let mut stores: Vec<StorePrice> = Vec::new();
+    for purchase in &comparable {
+        let key = fold_key(&purchase.store);
+        match stores
+            .iter_mut()
+            .find(|entry| fold_key(&entry.store) == key)
+        {
+            // `comparable` is newest first, so the first sighting carries the
+            // store's latest price and spelling; later ones only feed the mean.
+            Some(entry) => {
+                entry.avg_unit_price = (entry.avg_unit_price * entry.count as f64
+                    + purchase.unit_price())
+                    / (entry.count + 1) as f64;
+                entry.count += 1;
+            }
+            None => stores.push(StorePrice {
+                store: purchase.store.clone(),
+                avg_unit_price: purchase.unit_price(),
+                last_date: purchase.date,
+                count: 1,
+            }),
+        }
+    }
+    stores.sort_by(|a, b| {
+        a.avg_unit_price
+            .partial_cmp(&b.avg_unit_price)
+            .unwrap_or(std::cmp::Ordering::Equal)
+            .then_with(|| fold_key(&a.store).cmp(&fold_key(&b.store)))
+    });
+
+    Some(ProductSummary {
+        product: latest.product.clone(),
+        unit: latest.unit,
+        latest,
+        previous_unit_price,
+        stores,
+        purchase_count: history.len(),
+    })
 }
 
 /// Stable, URL-safe identity for a product name (FNV-1a over its folded key).

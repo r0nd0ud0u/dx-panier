@@ -65,3 +65,7 @@ opt-level = 1
 
 [profile.android-dev]
 inherits = "dev"
+# Same reason as wasm-dev above: unoptimised, the price comparisons this app
+# is built around run about five times slower, which on a phone is the
+# difference between a tab switching instantly and visibly lagging.
+opt-level = 1
