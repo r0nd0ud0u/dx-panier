@@ -17,10 +17,10 @@ pub fn ProductDetailPage(product_id: u64) -> Element {
     // Resolved once and shared: `product_by_key` walks every purchase to
     // rebuild the product list, so the summary and history memos below read
     // this instead of each calling it again themselves.
-    let product_name = use_memo(move || db().product_by_key(product_id));
-    let summary = use_memo(move || db().summary_for(product_name()?.as_str()));
-    let history = use_memo(move || match product_name() {
-        Some(name) => db().history(&name),
+    let product_name = use_memo(move || db.read().product_by_key(product_id));
+    let summary = use_memo(move || db.read().summary_for(product_name.read().as_deref()?));
+    let history = use_memo(move || match product_name.read().as_deref() {
+        Some(name) => db.read().history(name),
         None => Vec::new(),
     });
 

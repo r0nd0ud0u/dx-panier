@@ -2,11 +2,15 @@ use dioxus::prelude::*;
 use dioxus_i18n::t;
 
 use crate::common::Route;
+use crate::storage::use_provide_derived;
 
 /// Frame around every page: the scrolling content, and a bottom tab bar placed
 /// within thumb reach — this app is used standing in a supermarket aisle.
 #[component]
 pub fn Shell() -> Element {
+    // Cached here, not per page: this component outlives every navigation.
+    use_provide_derived();
+
     rsx! {
         div { class: "app",
             main { class: "content", Outlet::<Route> {} }

@@ -7,7 +7,7 @@ use crate::model::{
 };
 use crate::pages::widgets::{RecentRow, input_unit_label};
 use crate::pages::{DATE_FORMAT, today};
-use crate::storage::use_db;
+use crate::storage::{use_db, use_derived};
 
 /// Data entry. The landing page, because it is the only thing anyone does in a
 /// shop: everything else is read later, at home.
@@ -31,25 +31,22 @@ pub fn AddPage() -> Element {
     // just applied.
     let mut chosen_pack = use_signal(String::new);
 
-    let known_products = use_memo(move || db().product_names());
-    let known_stores = use_memo(move || db().stores());
+    let derived = use_derived();
+    let known_products = derived.product_names;
+    let known_stores = derived.stores;
     let matching_packs = use_memo(move || {
         let name = product();
         if name.trim().is_empty() {
             Vec::new()
         } else {
-            db().packs_for(&name)
+            db.read()
+                .packs_for(&name)
                 .into_iter()
                 .cloned()
                 .collect::<Vec<_>>()
         }
     });
-    let recent = use_memo(move || {
-        db().sorted_recent_first()
-            .into_iter()
-            .take(8)
-            .collect::<Vec<_>>()
-    });
+    let recent = use_memo(move || db.read().recent(8));
 
     let mut submit = move || {
         let product_name = normalize(&product());

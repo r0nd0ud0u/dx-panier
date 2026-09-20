@@ -316,6 +316,16 @@ impl Db {
         self.sorted_refs().into_iter().cloned().collect()
     }
 
+    /// The newest `count` purchases — sorts references and clones only the
+    /// handful that will actually be shown.
+    pub fn recent(&self, count: usize) -> Vec<Purchase> {
+        self.sorted_refs()
+            .into_iter()
+            .take(count)
+            .cloned()
+            .collect()
+    }
+
     /// Full history of one product, newest first, every unit included.
     ///
     /// Filters before sorting, not after: `summaries` calls this once per
@@ -391,31 +401,38 @@ impl Db {
     /// The shopping plan: every product grouped under the store that sells it
     /// cheapest, stores ordered by how much they save overall.
     pub fn best_store_plan(&self) -> Vec<(String, Vec<ProductSummary>)> {
-        let mut plan: Vec<(String, Vec<ProductSummary>)> = Vec::new();
-        for summary in self.summaries(None) {
-            let Some(best) = summary.best() else { continue };
-            let store = best.store.clone();
-            match plan
-                .iter_mut()
-                .find(|(name, _)| fold_key(name) == fold_key(&store))
-            {
-                Some((_, products)) => products.push(summary),
-                None => plan.push((store, vec![summary])),
-            }
-        }
-        plan.sort_by(|a, b| {
-            let savings = |products: &Vec<ProductSummary>| {
-                products
-                    .iter()
-                    .filter_map(ProductSummary::savings_per_unit)
-                    .sum::<f64>()
-            };
-            savings(&b.1)
-                .partial_cmp(&savings(&a.1))
-                .unwrap_or(std::cmp::Ordering::Equal)
-        });
-        plan
+        plan_from(self.summaries(None))
     }
+}
+
+/// The shopping plan, from summaries already computed — the caller usually has
+/// them cached, and recomputing every product's comparison to group them is by
+/// far the expensive half.
+pub fn plan_from(summaries: Vec<ProductSummary>) -> Vec<(String, Vec<ProductSummary>)> {
+    let mut plan: Vec<(String, Vec<ProductSummary>)> = Vec::new();
+    for summary in summaries {
+        let Some(best) = summary.best() else { continue };
+        let store = best.store.clone();
+        match plan
+            .iter_mut()
+            .find(|(name, _)| fold_key(name) == fold_key(&store))
+        {
+            Some((_, products)) => products.push(summary),
+            None => plan.push((store, vec![summary])),
+        }
+    }
+    plan.sort_by(|a, b| {
+        let savings = |products: &Vec<ProductSummary>| {
+            products
+                .iter()
+                .filter_map(ProductSummary::savings_per_unit)
+                .sum::<f64>()
+        };
+        savings(&b.1)
+            .partial_cmp(&savings(&a.1))
+            .unwrap_or(std::cmp::Ordering::Equal)
+    });
+    plan
 }
 
 /// Folds one product's purchases — newest first — into the row a list shows.

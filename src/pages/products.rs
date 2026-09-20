@@ -4,7 +4,7 @@ use dioxus_i18n::t;
 use crate::common::Route;
 use crate::model::{fold_key, format_cents, format_unit_price, product_key};
 use crate::pages::widgets::TrendBadge;
-use crate::storage::use_db;
+use crate::storage::{use_db, use_derived};
 
 /// Everything bought so far, one row per product, with the cheapest store named.
 #[component]
@@ -13,19 +13,37 @@ pub fn ProductsPage() -> Element {
     let mut search = use_signal(String::new);
     let mut store_filter = use_signal(String::new);
 
-    let stores = use_memo(move || db().stores());
+    // `db.read()` throughout, never `db()`: a Signal derefs to `Fn() -> T`, so
+    // calling it clones the entire database — every purchase, every string —
+    // once per call site, per render.
+    let derived = use_derived();
+    let stores = derived.stores;
+    // The unfiltered comparison is already cached by the layout; only a store
+    // filter, which most visits do not use, needs its own pass.
     let summaries = use_memo(move || {
         let filter = store_filter();
-        db().summaries((!filter.is_empty()).then_some(filter).as_deref())
+        if filter.is_empty() {
+            derived.summaries.read().clone()
+        } else {
+            db.read().summaries(Some(&filter))
+        }
     });
     let matches = use_memo(move || {
         let needle = fold_key(&search());
-        summaries()
-            .into_iter()
-            .filter(|summary| needle.is_empty() || fold_key(&summary.product).contains(&needle))
+        if needle.is_empty() {
+            return summaries.read().clone();
+        }
+        summaries
+            .read()
+            .iter()
+            .filter(|summary| fold_key(&summary.product).contains(&needle))
+            .cloned()
             .collect::<Vec<_>>()
     });
-    let is_empty = use_memo(move || db().purchases.is_empty());
+    let is_empty = use_memo(move || db.read().purchases.is_empty());
+    // Every row rendered is a dozen DOM nodes crossing the bridge to the
+    // webview, and a phone shows six at a time. The rest arrive on demand.
+    let mut shown = use_signal(|| PAGE);
 
     rsx! {
         header { class: "page-header",
@@ -57,7 +75,7 @@ pub fn ProductsPage() -> Element {
             p { class: "muted", {t!("products-no-match")} }
         } else {
             ul { class: "list",
-                for summary in matches() {
+                for summary in matches().into_iter().take(shown()) {
                     li { key: "{summary.product}", class: "card-row",
                         Link {
                             to: Route::ProductDetailPage {
@@ -88,6 +106,16 @@ pub fn ProductsPage() -> Element {
                     }
                 }
             }
+            if matches().len() > shown() {
+                button {
+                    class: "button",
+                    onclick: move |_| shown += PAGE,
+                    {t!("action-show-more", count : (matches().len() - shown()) as i64)}
+                }
+            }
         }
     }
 }
+
+/// How many product rows to render before asking.
+const PAGE: usize = 40;

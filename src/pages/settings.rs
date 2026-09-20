@@ -2,7 +2,7 @@ use dioxus::prelude::*;
 use dioxus_i18n::t;
 
 use crate::model::{Db, PackDef, format_number, normalize, parse_quantity};
-use crate::storage::{use_db, use_lang};
+use crate::storage::{use_db, use_derived, use_lang};
 
 #[component]
 pub fn SettingsPage() -> Element {
@@ -11,12 +11,12 @@ pub fn SettingsPage() -> Element {
     let mut notice: Signal<Option<Notice>> = use_signal(|| None);
     let mut confirm_wipe = use_signal(|| false);
 
+    let derived = use_derived();
     let stats = use_memo(move || {
-        let db = db();
         (
-            db.purchases.len(),
-            db.product_names().len(),
-            db.stores().len(),
+            db.read().purchases.len(),
+            derived.product_names.read().len(),
+            derived.stores.read().len(),
         )
     });
 
@@ -88,13 +88,13 @@ pub fn SettingsPage() -> Element {
 /// quantity shortcut for that product — see `matching_packs` in add.rs.
 #[component]
 fn PacksSection(mut db: Signal<Db>) -> Element {
+    let known_products = use_derived().product_names;
     let mut product = use_signal(String::new);
     let mut label = use_signal(String::new);
     let mut pieces = use_signal(String::new);
     let mut error: Signal<Option<String>> = use_signal(|| None);
 
-    let known_products = use_memo(move || db().product_names());
-    let packs = use_memo(move || db().packs.clone());
+    let packs = use_memo(move || db.read().packs.clone());
 
     let mut add_pack = move || {
         let product_name = normalize(&product());
@@ -322,7 +322,7 @@ fn export(db: Signal<Db>, mut notice: Signal<Option<Notice>>) {
         // otherwise reports the download it as failed.
         return true;
     "#;
-    let json = serde_json::to_string_pretty(&db()).unwrap_or_default();
+    let json = serde_json::to_string_pretty(&*db.read()).unwrap_or_default();
     spawn(async move {
         let eval = document::eval(SCRIPT);
         if eval.send(json).is_err() || eval.send(EXPORT_FILE_NAME).is_err() {
@@ -342,7 +342,7 @@ fn export(db: Signal<Db>, mut notice: Signal<Option<Notice>>) {
 /// dialog, not a failure worth reporting.
 #[cfg(feature = "desktop")]
 fn export(db: Signal<Db>, mut notice: Signal<Option<Notice>>) {
-    let json = serde_json::to_string_pretty(&db()).unwrap_or_default();
+    let json = serde_json::to_string_pretty(&*db.read()).unwrap_or_default();
     spawn(async move {
         let Some(file) = rfd::AsyncFileDialog::new()
             .add_filter("JSON", &["json"])
@@ -637,7 +637,7 @@ fn write_backup(
     db: Signal<Db>,
     mut notice: Signal<Option<Notice>>,
 ) -> bool {
-    let json = serde_json::to_string_pretty(&db()).unwrap_or_default();
+    let json = serde_json::to_string_pretty(&*db.read()).unwrap_or_default();
     if let Some(parent) = path.parent() {
         let _ = std::fs::create_dir_all(parent);
     }

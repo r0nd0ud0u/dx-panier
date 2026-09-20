@@ -34,6 +34,7 @@ action-confirm = Confirm
 action-import = Import
 action-export = Export
 action-back = Back
+action-show-more = Show more ({ $count } left)
 action-browse = Browse
 action-choose-folder = Choose folder
 action-open = Open
