@@ -200,12 +200,7 @@ fn PacksSection(mut db: Signal<Db>) -> Element {
 enum Notice {
     ImportDone(usize),
     ImportError,
-    // Only web and desktop can report how the export itself went — Android
-    // still exports as inert, always-successful text (see `BackupSection`
-    // below), so these two never get constructed there.
-    #[cfg_attr(feature = "mobile", allow(dead_code))]
     ExportDone,
-    #[cfg_attr(feature = "mobile", allow(dead_code))]
     ExportError,
 }
 
@@ -287,7 +282,6 @@ fn BackupSection(mut db: Signal<Db>, mut notice: Signal<Option<Notice>>) -> Elem
     }
 }
 
-#[cfg(not(feature = "mobile"))]
 const EXPORT_FILE_NAME: &str = "panier-sauvegarde.json";
 
 /// Downloads the backup the way a browser downloads anything: a `Blob` behind
@@ -351,44 +345,176 @@ fn export(db: Signal<Db>, mut notice: Signal<Option<Notice>>) {
     });
 }
 
-/// Android has no file dialog here: `rfd` has no Android backend at all, and
-/// dioxus-desktop's own `<input type="file">` bridge (used above on web and
-/// desktop) is stubbed out to return nothing on Android too. Until one of
-/// those grows Android support, this keeps the copy-paste flow the app has
-/// always used there.
+/// Android's WebView has a real native file picker and share sheet — but
+/// neither `rfd` nor dioxus-desktop's own `<input type="file">` bridge (used
+/// above on web and desktop) reach them: dioxus intercepts every file input
+/// click itself (`window.addEventListener("click", ...)` in its JS runtime,
+/// shared by desktop and mobile alike) and asks Rust to run a native dialog —
+/// which on Android is a stub that answers with nothing. `import_native`
+/// and `export_share` below go around that stub entirely, straight to the
+/// browser platform APIs, which is why they need raw JS rather than the
+/// dioxus-rendered `<input>` the other `BackupSection` uses.
+///
+/// Untested on a real device — there was none available to build this
+/// against — so the copy-paste flow stays too, revealed only once a button
+/// above has actually failed, never hidden behind a guess that it won't.
 #[cfg(feature = "mobile")]
 #[component]
 fn BackupSection(mut db: Signal<Db>, mut notice: Signal<Option<Notice>>) -> Element {
     let mut import_text = use_signal(String::new);
-    let export = use_memo(move || serde_json::to_string(&db()).unwrap_or_default());
+    let export_text = use_memo(move || serde_json::to_string(&db()).unwrap_or_default());
 
     rsx! {
         section { class: "section",
             h2 { {t!("settings-export")} }
-            p { class: "muted", {t!("settings-export-help")} }
-            textarea { class: "control mono", rows: "4", readonly: true, value: "{export}" }
+            p { class: "muted", {t!("settings-backup-help")} }
+            button {
+                class: "button",
+                onclick: move |_| export_share(db, notice),
+                {t!("action-export")}
+            }
+            if notice() == Some(Notice::ExportError) {
+                p { class: "muted", {t!("settings-export-fallback-help")} }
+                textarea { class: "control mono", rows: "4", readonly: true, value: "{export_text}" }
+            }
         }
 
         section { class: "section",
             h2 { {t!("settings-import")} }
-            p { class: "muted", {t!("settings-import-help")} }
-            textarea {
-                class: "control mono",
-                rows: "4",
-                value: "{import_text}",
-                oninput: move |event| import_text.set(event.value()),
-            }
+            p { class: "muted", {t!("settings-restore-help")} }
             button {
                 class: "button",
-                disabled: import_text().trim().is_empty(),
-                onclick: move |_| {
-                    apply_import(&import_text(), &mut db, &mut notice);
-                    import_text.set(String::new());
-                },
+                onclick: move |_| import_native(db, notice),
                 {t!("action-import")}
+            }
+            if notice() == Some(Notice::ImportError) {
+                p { class: "muted", {t!("settings-import-fallback-help")} }
+                textarea {
+                    class: "control mono",
+                    rows: "4",
+                    value: "{import_text}",
+                    oninput: move |event| import_text.set(event.value()),
+                }
+                button {
+                    class: "button",
+                    disabled: import_text().trim().is_empty(),
+                    onclick: move |_| {
+                        apply_import(&import_text(), &mut db, &mut notice);
+                        import_text.set(String::new());
+                    },
+                    {t!("action-import")}
+                }
             }
         }
 
         BackupNotice { notice }
     }
+}
+
+/// Hands the backup to Android's share sheet ("Save to Drive", "Files", …) as
+/// a real file, via the Web Share API's file support (`navigator.share`
+/// with `files:`) — a plain script call, not a DOM element dioxus watches,
+/// so nothing here needs to dodge its file-input interception.
+#[cfg(feature = "mobile")]
+fn export_share(db: Signal<Db>, mut notice: Signal<Option<Notice>>) {
+    const SCRIPT: &str = r#"
+        const json = await dioxus.recv();
+        const name = await dioxus.recv();
+        const file = new File([json], name, { type: "application/json" });
+        if (!navigator.canShare || !navigator.canShare({ files: [file] })) {
+            return "unsupported";
+        }
+        try {
+            await navigator.share({ files: [file] });
+            return "ok";
+        } catch (e) {
+            // The user closing the share sheet without picking anything is
+            // not a failure worth falling back over.
+            return (e && e.name === "AbortError") ? "cancelled" : "error";
+        }
+    "#;
+    let json = serde_json::to_string_pretty(&db()).unwrap_or_default();
+    spawn(async move {
+        let eval = document::eval(SCRIPT);
+        if eval.send(json).is_err() || eval.send(EXPORT_FILE_NAME).is_err() {
+            notice.set(Some(Notice::ExportError));
+            return;
+        }
+        let status: String = eval
+            .await
+            .ok()
+            .and_then(|value| serde_json::from_value(value).ok())
+            .unwrap_or_else(|| "error".to_owned());
+        match status.as_str() {
+            "ok" => notice.set(Some(Notice::ExportDone)),
+            "cancelled" => {}
+            _ => notice.set(Some(Notice::ExportError)),
+        }
+    });
+}
+
+/// A JSON-only response from `import_native`'s script: which of "ok",
+/// "cancelled" or "error" it ended on, and the file's text when "ok".
+#[cfg(feature = "mobile")]
+#[derive(serde::Deserialize)]
+struct NativeImportResult {
+    status: String,
+    #[serde(default)]
+    text: String,
+}
+
+/// Opens Android's own file picker directly — bypassing dioxus's own
+/// file-input handling, which never reaches it (see `BackupSection`'s
+/// comment) — by creating a plain, undecorated `<input type="file">` outside
+/// dioxus's render tree and stopping its click from ever reaching the
+/// `window`-level listener dioxus installs. Cached on `window` so a second
+/// import reuses the same element rather than leaking one per attempt.
+#[cfg(feature = "mobile")]
+fn import_native(mut db: Signal<Db>, mut notice: Signal<Option<Notice>>) {
+    const SCRIPT: &str = r#"
+        return await new Promise((resolve) => {
+            if (!window.__panierFileInput) {
+                const input = document.createElement("input");
+                input.type = "file";
+                input.accept = ".json";
+                input.style.display = "none";
+                input.addEventListener("click", (e) => e.stopPropagation());
+                document.body.appendChild(input);
+                window.__panierFileInput = input;
+            }
+            const input = window.__panierFileInput;
+            const finish = (result) => {
+                input.removeEventListener("change", onChange);
+                input.removeEventListener("cancel", onCancel);
+                resolve(result);
+            };
+            const onChange = () => {
+                const file = input.files && input.files[0];
+                if (!file) { finish({ status: "cancelled" }); return; }
+                file.text()
+                    .then((text) => finish({ status: "ok", text }))
+                    .catch(() => finish({ status: "error" }));
+            };
+            const onCancel = () => finish({ status: "cancelled" });
+            input.addEventListener("change", onChange);
+            input.addEventListener("cancel", onCancel);
+            // Otherwise picking the same file twice in a row does not fire
+            // "change" the second time — its value never appeared to change.
+            input.value = "";
+            input.click();
+        });
+    "#;
+    spawn(async move {
+        let result: Option<NativeImportResult> = document::eval(SCRIPT)
+            .await
+            .ok()
+            .and_then(|value| serde_json::from_value(value).ok());
+        match result {
+            Some(NativeImportResult { status, text }) if status == "ok" => {
+                apply_import(&text, &mut db, &mut notice);
+            }
+            Some(NativeImportResult { status, .. }) if status == "cancelled" => {}
+            _ => notice.set(Some(Notice::ImportError)),
+        }
+    });
 }

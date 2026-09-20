@@ -85,17 +85,14 @@ settings-packs = My packs
 settings-packs-help = Define a pack size once (e.g. Coca-Cola by 6) to get it back as a shortcut on the add form.
 settings-packs-empty = No packs defined yet.
 settings-export = Backup
-# Android only — the file-export button isn't available there; see the
-# comment on `BackupSection` (feature = "mobile") in settings.rs.
-settings-export-help = Copy this text and keep it somewhere safe.
 settings-backup-help = Save your purchases to a JSON file, and keep it somewhere safe.
 settings-export-done = Backup exported.
 settings-export-error = Couldn't save the file.
+settings-export-fallback-help = Sharing didn't work on this device — copy this text instead.
 settings-import = Restore
-# Android only, same limitation as settings-export-help above.
-settings-import-help = Paste a backup here. It will replace the entire current history.
 settings-restore-help = Choose a JSON backup file. It will replace the entire current history.
 settings-import-error = Unreadable backup — nothing was changed.
+settings-import-fallback-help = The file picker didn't work on this device — paste a backup here instead.
 settings-import-done =
     { $count ->
         [one] { $count } purchase restored.
