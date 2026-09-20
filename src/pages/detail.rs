@@ -3,7 +3,7 @@ use dioxus_i18n::t;
 
 use crate::model::format_unit_price;
 use crate::pages::DATE_FORMAT;
-use crate::pages::widgets::{HistoryRow, Sparkline, TrendBadge};
+use crate::pages::widgets::{BackButton, HistoryRow, Sparkline, TrendBadge};
 use crate::storage::use_db;
 
 /// One product: how its unit price moved, how the stores compare, and every line
@@ -13,19 +13,25 @@ pub fn ProductDetailPage(product_id: u64) -> Element {
     let db = use_db();
     // Every hook runs before the early return below — a `return` between two of
     // them would shift the hook order on the next render and panic.
-    let summary = use_memo(move || {
-        let name = db().product_by_key(product_id)?;
-        db().summaries(None)
-            .into_iter()
-            .find(|summary| summary.product == name)
-    });
-    let history = use_memo(move || match db().product_by_key(product_id) {
-        Some(name) => db().history(&name),
+    //
+    // Resolved once and shared: `product_by_key` walks every purchase to
+    // rebuild the product list, so the summary and history memos below read
+    // this instead of each calling it again themselves.
+    let product_name = use_memo(move || db.read().product_by_key(product_id));
+    let summary = use_memo(move || db.read().summary_for(product_name.read().as_deref()?));
+    let history = use_memo(move || match product_name.read().as_deref() {
+        Some(name) => db.read().history(name),
         None => Vec::new(),
     });
 
     let Some(summary) = summary() else {
         return rsx! {
+            header { class: "page-header",
+                div { class: "page-header-start",
+                    BackButton {}
+                    h1 { {t!("detail-not-found-title")} }
+                }
+            }
             p { class: "muted", {t!("detail-not-found")} }
         };
     };
@@ -44,7 +50,10 @@ pub fn ProductDetailPage(product_id: u64) -> Element {
 
     rsx! {
         header { class: "page-header",
-            h1 { "{summary.product}" }
+            div { class: "page-header-start",
+                BackButton {}
+                h1 { "{summary.product}" }
+            }
             TrendBadge { trend: summary.trend() }
         }
 
@@ -56,7 +65,7 @@ pub fn ProductDetailPage(product_id: u64) -> Element {
         section { class: "section",
             h2 { {t!("detail-by-store")} }
             ul { class: "list",
-                for (rank , store) in summary.stores.iter().enumerate() {
+                for (rank, store) in summary.stores.iter().enumerate() {
                     li {
                         key: "{store.store}",
                         class: if rank == 0 { "row best-row" } else { "row" },

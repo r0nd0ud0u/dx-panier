@@ -53,6 +53,20 @@ body {
   margin: 8px 0 20px;
 }
 
+/* Groups a back button with the title as one flex item, so `.page-header`'s
+ * space-between still puts a second item (a badge, an action) at the far end
+ * instead of splitting three items evenly. */
+.page-header-start {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  min-width: 0;
+}
+
+.back-button {
+  font-size: 1.5rem;
+}
+
 h1 {
   margin: 0;
   font-size: 1.5rem;
@@ -275,6 +289,21 @@ textarea.control {
   margin: 0;
   color: var(--accent);
   font-size: 0.85rem;
+}
+
+/* Hides the raw `<input type="file">` behind a `<label class="button">`
+ * without hiding it from the accessibility tree or breaking the click-through
+ * a `<label for>` needs — `display: none` would do both. */
+.sr-only {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  padding: 0;
+  margin: -1px;
+  overflow: hidden;
+  clip: rect(0, 0, 0, 0);
+  white-space: nowrap;
+  border: 0;
 }
 
 /* Trend badge ------------------------------------------------------------ */

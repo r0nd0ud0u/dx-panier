@@ -14,6 +14,12 @@ field-note = Note
 field-note-placeholder = Brand, special offer…
 field-product-placeholder = Butter
 field-store-placeholder = Lidl
+field-piece-weight = Weight per piece (optional)
+field-pack = Pack
+field-pack-none = Free quantity
+field-pack-label = Pack name
+field-pack-pieces = Pieces per pack
+field-file-name = File name
 
 unit-kg = kilo
 unit-g = gram
@@ -26,11 +32,21 @@ action-delete = Delete
 action-cancel = Cancel
 action-confirm = Confirm
 action-import = Import
+action-export = Export
+action-back = Back
+action-show-more = Show more ({ $count } left)
+action-browse = Browse
+action-choose-folder = Choose folder
+action-open = Open
+action-save-here = Save here
 
 error-product = Enter a product.
 error-store = Enter a store.
 error-price = Invalid price — write 2.45, for example.
 error-quantity = Invalid quantity — it must be greater than zero.
+error-piece-weight = Invalid weight — leave this field empty if you don't know it.
+error-pack-label = Enter a name for this pack.
+error-pack-pieces = Invalid piece count — it must be greater than zero.
 
 recent-title = Latest entries
 recent-empty = Nothing recorded yet.
@@ -54,6 +70,7 @@ trend-down = Going down
 trend-flat = Steady
 trend-new = First entry
 
+detail-not-found-title = Product not found
 detail-not-found = This product no longer exists.
 detail-evolution = Unit price over time
 detail-by-store = Store by store
@@ -70,11 +87,19 @@ settings-title = Settings
 settings-language = Language
 settings-data = Data
 settings-stats = { $purchases } purchases · { $products } products · { $stores } stores
+settings-packs = My packs
+settings-packs-help = Define a pack size once (e.g. Coca-Cola by 6) to get it back as a shortcut on the add form.
+settings-packs-empty = No packs defined yet.
 settings-export = Backup
-settings-export-help = Copy this text and keep it somewhere safe.
+settings-backup-help = Save your purchases to a JSON file, and keep it somewhere safe.
+settings-export-done = Backup exported.
+settings-export-error = Couldn't save the file.
+settings-export-saved = Backup saved to:
+settings-browse = File browser
 settings-import = Restore
-settings-import-help = Paste a backup here. It will replace the entire current history.
+settings-restore-help = Choose a JSON backup file. It will replace the entire current history.
 settings-import-error = Unreadable backup — nothing was changed.
+settings-import-fallback-help = Or paste a backup directly here.
 settings-import-done =
     { $count ->
         [one] { $count } purchase restored.

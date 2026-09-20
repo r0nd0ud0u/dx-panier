@@ -14,6 +14,12 @@ field-note = Note
 field-note-placeholder = Marque, promotion…
 field-product-placeholder = Beurre doux
 field-store-placeholder = Lidl
+field-piece-weight = Poids d'une pièce (optionnel)
+field-pack = Pack
+field-pack-none = Quantité libre
+field-pack-label = Nom du pack
+field-pack-pieces = Nombre de pièces par pack
+field-file-name = Nom du fichier
 
 unit-kg = kilo
 unit-g = gramme
@@ -26,11 +32,21 @@ action-delete = Supprimer
 action-cancel = Annuler
 action-confirm = Confirmer
 action-import = Importer
+action-export = Exporter
+action-back = Retour
+action-show-more = Afficher plus ({ $count } restants)
+action-browse = Parcourir
+action-choose-folder = Choisir le dossier
+action-open = Ouvrir
+action-save-here = Enregistrer ici
 
 error-product = Indique un produit.
 error-store = Indique un magasin.
 error-price = Prix invalide — écris par exemple 2,45.
 error-quantity = Quantité invalide — elle doit être supérieure à zéro.
+error-piece-weight = Poids invalide — laisse ce champ vide si tu ne le connais pas.
+error-pack-label = Indique un nom pour ce pack.
+error-pack-pieces = Nombre de pièces invalide — il doit être supérieur à zéro.
 
 recent-title = Derniers ajouts
 recent-empty = Aucun achat enregistré pour l'instant.
@@ -54,6 +70,7 @@ trend-down = En baisse
 trend-flat = Stable
 trend-new = Premier relevé
 
+detail-not-found-title = Produit introuvable
 detail-not-found = Ce produit n'existe plus.
 detail-evolution = Évolution du prix unitaire
 detail-by-store = Comparatif par magasin
@@ -70,11 +87,19 @@ settings-title = Réglages
 settings-language = Langue
 settings-data = Données
 settings-stats = { $purchases } achats · { $products } produits · { $stores } magasins
+settings-packs = Mes packs
+settings-packs-help = Définis une fois la taille d'un pack (ex. Coca-Cola par 6) pour la retrouver comme raccourci dans le formulaire d'ajout.
+settings-packs-empty = Aucun pack défini pour l'instant.
 settings-export = Sauvegarde
-settings-export-help = Copie ce texte et garde-le en lieu sûr.
+settings-backup-help = Enregistre tes achats dans un fichier JSON, à garder en lieu sûr.
+settings-export-done = Sauvegarde exportée.
+settings-export-error = Impossible d'enregistrer le fichier.
+settings-export-saved = Sauvegarde enregistrée dans :
+settings-browse = Explorateur
 settings-import = Restauration
-settings-import-help = Colle ici une sauvegarde. Elle remplacera tout l'historique actuel.
+settings-restore-help = Choisis un fichier de sauvegarde JSON. Il remplacera tout l'historique actuel.
 settings-import-error = Sauvegarde illisible — rien n'a été modifié.
+settings-import-fallback-help = Ou colle directement une sauvegarde ici.
 settings-import-done =
     { $count ->
         [one] { $count } achat restauré.

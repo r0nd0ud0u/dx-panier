@@ -2,10 +2,12 @@ use chrono::NaiveDate;
 use dioxus::prelude::*;
 use dioxus_i18n::t;
 
-use crate::model::{InputUnit, Purchase, normalize, parse_price_to_cents, parse_quantity};
+use crate::model::{
+    InputUnit, Purchase, format_number, normalize, parse_price_to_cents, parse_quantity,
+};
 use crate::pages::widgets::{RecentRow, input_unit_label};
 use crate::pages::{DATE_FORMAT, today};
-use crate::storage::use_db;
+use crate::storage::{use_db, use_derived};
 
 /// Data entry. The landing page, because it is the only thing anyone does in a
 /// shop: everything else is read later, at home.
@@ -18,18 +20,33 @@ pub fn AddPage() -> Element {
     let mut price = use_signal(String::new);
     let mut quantity = use_signal(|| "1".to_owned());
     let mut unit = use_signal(InputUnit::default);
+    // Only meaningful for InputUnit::Piece — see the field's comment below.
+    let mut piece_weight = use_signal(String::new);
     let mut date = use_signal(|| today().format(DATE_FORMAT).to_string());
     let mut note = use_signal(String::new);
     let mut error: Signal<Option<String>> = use_signal(|| None);
+    // Reset right after applying a pack — a select value that changes on its
+    // own, from the chosen id back to "", is what makes Dioxus re-render the
+    // dropdown back to its placeholder instead of leaving it stuck on the pack
+    // just applied.
+    let mut chosen_pack = use_signal(String::new);
 
-    let known_products = use_memo(move || db().product_names());
-    let known_stores = use_memo(move || db().stores());
-    let recent = use_memo(move || {
-        db().sorted_recent_first()
-            .into_iter()
-            .take(8)
-            .collect::<Vec<_>>()
+    let derived = use_derived();
+    let known_products = derived.product_names;
+    let known_stores = derived.stores;
+    let matching_packs = use_memo(move || {
+        let name = product();
+        if name.trim().is_empty() {
+            Vec::new()
+        } else {
+            db.read()
+                .packs_for(&name)
+                .into_iter()
+                .cloned()
+                .collect::<Vec<_>>()
+        }
     });
+    let recent = use_memo(move || db.read().recent(8));
 
     let mut submit = move || {
         let product_name = normalize(&product());
@@ -50,10 +67,23 @@ pub fn AddPage() -> Element {
             error.set(Some(t!("error-quantity")));
             return;
         };
+        // Blank is "not given", not zero — the field is optional and only shown
+        // for InputUnit::Piece to begin with.
+        let piece_weight_kg = if unit() == InputUnit::Piece && !piece_weight().trim().is_empty() {
+            let Some(weight) = parse_quantity(&piece_weight()) else {
+                error.set(Some(t!("error-piece-weight")));
+                return;
+            };
+            Some(weight)
+        } else {
+            None
+        };
         let day = NaiveDate::parse_from_str(&date(), DATE_FORMAT).unwrap_or_else(|_| today());
         let note_text = normalize(&note());
-        // 250 g is stored as 0.25 kg — see `InputUnit`.
-        let (canonical_unit, canonical_quantity) = unit().to_canonical(quantity_value);
+        // 250 g is stored as 0.25 kg, and 4 pieces at 150 g each as 0.6 kg — see
+        // `InputUnit::to_canonical_weighted`.
+        let (canonical_unit, canonical_quantity) =
+            unit().to_canonical_weighted(quantity_value, piece_weight_kg);
 
         let purchase = Purchase {
             id: db.read().next_id(),
@@ -73,6 +103,10 @@ pub fn AddPage() -> Element {
         product.set(String::new());
         price.set(String::new());
         quantity.set("1".to_owned());
+        // Unlike store/date/unit, a per-item weight describes this specific
+        // batch (these kiwis, today), not the shopping trip — it does not
+        // survive to the next line.
+        piece_weight.set(String::new());
         note.set(String::new());
     };
 
@@ -96,6 +130,38 @@ pub fn AddPage() -> Element {
             datalist { id: "known-products",
                 for name in known_products() {
                     option { key: "{name}", value: "{name}" }
+                }
+            }
+
+            // A one-shot shortcut, not an ongoing state: applying a pack fills
+            // Quantité/Unité below, then the select snaps back to its
+            // placeholder — see `chosen_pack`'s comment above. Packs are
+            // defined in Réglages.
+            if !matching_packs().is_empty() {
+                label { class: "field",
+                    span { class: "field-label", {t!("field-pack")} }
+                    select {
+                        class: "control",
+                        value: "{chosen_pack}",
+                        onchange: move |event| {
+                            let chosen = event.value();
+                            if let Some(pack) = matching_packs()
+                                .into_iter()
+                                .find(|p| p.id.to_string() == chosen)
+                            {
+                                quantity.set(format_number(pack.pieces));
+                                unit.set(InputUnit::Piece);
+                            }
+                            chosen_pack.set(String::new());
+                        },
+                        option { value: "", {t!("field-pack-none")} }
+                        for pack in matching_packs() {
+                            option { key: "{pack.id}", value: "{pack.id}",
+                                "{pack.label} · {format_number(pack.pieces)} "
+                                {t!("unit-piece")}
+                            }
+                        }
+                    }
                 }
             }
 
@@ -147,11 +213,11 @@ pub fn AddPage() -> Element {
                     select {
                         class: "control",
                         value: "{unit().key()}",
-                        onchange: move |event| {
-                            unit.set(InputUnit::from_key(&event.value()).unwrap_or_default())
-                        },
+                        onchange: move |event| { unit.set(InputUnit::from_key(&event.value()).unwrap_or_default()) },
                         for option_unit in InputUnit::ALL {
-                            option { key: "{option_unit.key()}", value: "{option_unit.key()}",
+                            option {
+                                key: "{option_unit.key()}",
+                                value: "{option_unit.key()}",
                                 {input_unit_label(option_unit)}
                             }
                         }
@@ -164,6 +230,26 @@ pub fn AddPage() -> Element {
                         r#type: "date",
                         value: "{date}",
                         oninput: move |event| date.set(event.value()),
+                    }
+                }
+            }
+
+            // Lets a per-item purchase (kiwis sold loose, "4 pièces") join the
+            // same comparison as one entered by weight ("600 g") — see
+            // `InputUnit::to_canonical_weighted`. Shown only for Piece: a
+            // weight already means something else — the quantity itself — for
+            // every other unit.
+            if unit() == InputUnit::Piece {
+                label { class: "field",
+                    span { class: "field-label", {t!("field-piece-weight")} }
+                    input {
+                        class: "control",
+                        inputmode: "decimal",
+                        value: "{piece_weight}",
+                        // A literal example, not translated — see the price
+                        // field's placeholder just below for the same choice.
+                        placeholder: "0,150",
+                        oninput: move |event| piece_weight.set(event.value()),
                     }
                 }
             }

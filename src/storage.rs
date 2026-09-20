@@ -5,7 +5,7 @@
 use dioxus::prelude::*;
 use dioxus_sdk_storage::LocalStorage;
 
-use crate::model::Db;
+use crate::model::{Db, ProductSummary};
 
 /// Storage key, and on native the literal filename under the app data directory.
 /// Versioned so a future breaking change to [`Db`] can migrate rather than eat
@@ -67,4 +67,35 @@ pub fn use_db() -> Signal<Db> {
 
 pub fn use_lang() -> Signal<String> {
     use_context::<CtxLang>().0
+}
+
+/// Values every page wants but none should rebuild: the product and store
+/// name lists, and the per-product comparison behind Produits and Où acheter.
+///
+/// Each is a full walk over every purchase, and each page used to redo them on
+/// mount — so switching tabs paid for them again every time. Provided from
+/// `Shell`, which is the router layout and therefore stays mounted across
+/// navigations, these are computed once and recomputed only when the database
+/// actually changes.
+#[derive(Clone, Copy)]
+pub struct CtxDerived {
+    pub product_names: Memo<Vec<String>>,
+    pub stores: Memo<Vec<String>>,
+    pub summaries: Memo<Vec<ProductSummary>>,
+}
+
+pub fn use_provide_derived() {
+    let db = use_db();
+    let product_names = use_memo(move || db.read().product_names());
+    let stores = use_memo(move || db.read().stores());
+    let summaries = use_memo(move || db.read().summaries(None));
+    use_context_provider(|| CtxDerived {
+        product_names,
+        stores,
+        summaries,
+    });
+}
+
+pub fn use_derived() -> CtxDerived {
+    use_context::<CtxDerived>()
 }
