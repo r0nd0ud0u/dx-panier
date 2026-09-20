@@ -292,12 +292,22 @@ impl Db {
     }
 
     /// Full history of one product, newest first, every unit included.
+    ///
+    /// Filters before sorting, not after: `summaries` calls this once per
+    /// distinct product, and sorting the *whole* purchase list every time —
+    /// as [`Self::sorted_recent_first`] would — turned a page with a few
+    /// hundred purchases across a few dozen products into tens of thousands
+    /// of wasted clones and comparisons for one screen.
     pub fn history(&self, product: &str) -> Vec<Purchase> {
         let key = fold_key(product);
-        self.sorted_recent_first()
-            .into_iter()
+        let mut matches: Vec<Purchase> = self
+            .purchases
+            .iter()
             .filter(|purchase| fold_key(&purchase.product) == key)
-            .collect()
+            .cloned()
+            .collect();
+        matches.sort_by(|a, b| b.date.cmp(&a.date).then(b.id.cmp(&a.id)));
+        matches
     }
 
     /// One summary per product, product name ascending.
@@ -314,6 +324,13 @@ impl Db {
             .collect();
         summaries.sort_by_key(|summary| fold_key(&summary.product));
         summaries
+    }
+
+    /// The one summary a product detail page needs — without computing (and
+    /// discarding) every other product's, the way `summaries(None).find(...)`
+    /// would.
+    pub fn summary_for(&self, product: &str) -> Option<ProductSummary> {
+        self.summarize(product, None)
     }
 
     fn summarize(&self, product: &str, store_filter: Option<&str>) -> Option<ProductSummary> {
@@ -690,6 +707,38 @@ mod tests {
         assert_eq!(summary.stores[0].store, "Aldi");
         // The kilo line is still in the history, just not in the comparison.
         assert_eq!(summary.purchase_count, 2);
+    }
+
+    #[test]
+    fn history_stays_newest_first_ties_broken_by_id() {
+        let mut db = Db::default();
+        db.insert(purchase(1, "Pain", "Lidl", 100, 1.0, 5));
+        db.insert(purchase(2, "Pain", "Lidl", 100, 1.0, 1));
+        // Same day as id 1, but entered later — must still sort after it.
+        db.insert(purchase(3, "Pain", "Lidl", 100, 1.0, 5));
+        db.insert(purchase(4, "Autre chose", "Lidl", 100, 1.0, 9));
+        let history = db.history("Pain");
+        assert_eq!(
+            history.iter().map(|p| p.id).collect::<Vec<_>>(),
+            vec![3, 1, 2]
+        );
+    }
+
+    #[test]
+    fn summary_for_one_product_matches_summaries_of_all() {
+        let mut db = Db::default();
+        db.insert(purchase(1, "Beurre", "Aldi", 150, 1.0, 1));
+        db.insert(purchase(2, "Beurre", "Lidl", 200, 1.0, 2));
+        db.insert(purchase(3, "Cafe", "Lidl", 500, 1.0, 3));
+
+        let from_all = db
+            .summaries(None)
+            .into_iter()
+            .find(|s| s.product == "Beurre")
+            .unwrap();
+        let direct = db.summary_for("Beurre").unwrap();
+        assert_eq!(direct, from_all);
+        assert!(db.summary_for("Inconnu").is_none());
     }
 
     #[test]

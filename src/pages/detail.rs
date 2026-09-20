@@ -13,13 +13,13 @@ pub fn ProductDetailPage(product_id: u64) -> Element {
     let db = use_db();
     // Every hook runs before the early return below — a `return` between two of
     // them would shift the hook order on the next render and panic.
-    let summary = use_memo(move || {
-        let name = db().product_by_key(product_id)?;
-        db().summaries(None)
-            .into_iter()
-            .find(|summary| summary.product == name)
-    });
-    let history = use_memo(move || match db().product_by_key(product_id) {
+    //
+    // Resolved once and shared: `product_by_key` walks every purchase to
+    // rebuild the product list, so the summary and history memos below read
+    // this instead of each calling it again themselves.
+    let product_name = use_memo(move || db().product_by_key(product_id));
+    let summary = use_memo(move || db().summary_for(product_name()?.as_str()));
+    let history = use_memo(move || match product_name() {
         Some(name) => db().history(&name),
         None => Vec::new(),
     });
